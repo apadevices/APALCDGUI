@@ -275,6 +275,44 @@ dose1.setAlarmCallback([](AlarmType alarm) {
 
 ---
 
+## DS3231 RTC — Time and Date Setting
+
+The library includes a built-in time/date edit modal for the DS3231 module. It is compiled in automatically when `DS3231.h` is included **before** `APALCDGUI.h` — if the include order is reversed, the modal is silently disabled.
+
+**Wiring (Mega 2560):** SDA → pin 20, SCL → pin 21, VCC → 3.3 V, GND → GND.
+
+**`platformio.ini`:**
+```ini
+lib_deps =
+    arduino-libraries/LiquidCrystal @ ^1.0.7
+    NorthernWidget/DS3231
+```
+
+**Sketch:**
+```cpp
+#include <Wire.h>
+#include <DS3231.h>      // ← MUST come before APALCDGUI.h
+#include <APALCDGUI.h>
+
+APALCDGUI gui;
+DS3231    rtc;
+
+void setup() {
+    Wire.begin();
+    gui.begin();
+    gui.setRTC(&rtc);   // wires both-buttons gesture to the modal
+    // addScreen() calls ...
+}
+```
+
+**Operation:** press both buttons within 200 ms → the modal opens. Knob1 switches between the TIME and DATE sub-screens. Knob2 moves the cursor; press to edit, rotate to change, press to confirm. Cursor on SAVE + press writes to the chip. Cursor on BACK + press discards.
+
+> `setBothPressedCallback()` takes priority over the RTC modal — do not set it if you want the modal to work.
+
+See `examples/mega/03_rtc/03_rtc.ino` for a full working example with live clock display on the home screen.
+
+---
+
 ## Configurable Limits
 
 Define these **before** `#include <APALCDGUI.h>`:
