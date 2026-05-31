@@ -46,7 +46,7 @@
 #endif
 
 // ---- Version ----------------------------------------------------------------
-#define APALCDGUI_VERSION "1.1.1"
+#define APALCDGUI_VERSION "1.1.3"
 
 // ---- Capacity — define BEFORE #include to override --------------------------
 // These control compile-time array sizes; defining them after #include has no effect.
@@ -78,9 +78,9 @@ constexpr uint8_t  APALCDGUI_BRIGHTNESS_STEP    = 10;       // per click in brig
 constexpr uint8_t  APALCDGUI_EEPROM_MARKER      = 0xAE;     // EEPROM valid marker
 
 // ---- Custom character slot IDs -----------------------------------------------
-// The library pre-loads these into the LCD's custom character memory (slots 0–4).
+// The library pre-loads slots 0–6 into the LCD's custom character memory.
 // Use CC_DEGREE in your home screen callback: lcd.write(CC_DEGREE)
-// Slots 5–7 are free for your own custom characters via lcd.createChar().
+// Slot 7 is free for your own custom character via lcd.createChar(7, ...).
 constexpr uint8_t CC_CURSOR_EDIT = 0;  // ► edit cursor shown while a field or action is selected
 constexpr uint8_t CC_DEGREE      = 4;  // ° degree symbol — useful for temperature display
 
@@ -321,6 +321,8 @@ public:
      *  line2: bottom message line, or nullptr to leave it blank.
      *  ms:    how long to display the message (default 1500 ms). */
     void showMessage(const char* line1, const char* line2 = nullptr, uint16_t ms = 1500);
+    void showMessage(const __FlashStringHelper* line1,
+                     const __FlashStringHelper* line2 = nullptr, uint16_t ms = 1500);
 
     /** Dismiss a showMessage() overlay immediately before its timer expires. */
     void clearMessage();
