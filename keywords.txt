@@ -1,0 +1,75 @@
+#######################################
+# Syntax Coloring Map — APALCDGUI
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1 — orange)
+#######################################
+
+APALCDGUI	KEYWORD1
+FieldDef	KEYWORD1
+FieldType	KEYWORD1
+ScreenSide	KEYWORD1
+AlertLevel	KEYWORD1
+
+#######################################
+# Methods and functions (KEYWORD2 — brown)
+#######################################
+
+begin	KEYWORD2
+update	KEYWORD2
+addHomeScreen	KEYWORD2
+setHomeCallback	KEYWORD2
+addScreen	KEYWORD2
+setMenuRow2Callback	KEYWORD2
+setRTC	KEYWORD2
+fieldInt	KEYWORD2
+fieldFloat	KEYWORD2
+fieldChoice	KEYWORD2
+fieldBool	KEYWORD2
+fieldAction	KEYWORD2
+fieldReadonly	KEYWORD2
+postAlert	KEYWORD2
+clearAlert	KEYWORD2
+hasAlert	KEYWORD2
+postActiveAlert	KEYWORD2
+cancelActiveAlert	KEYWORD2
+hasActiveAlert	KEYWORD2
+activeAlertCount	KEYWORD2
+setBacklight	KEYWORD2
+setBacklightTimeout	KEYWORD2
+setMenuTimeout	KEYWORD2
+setLongPressCallback	KEYWORD2
+setBothPressedCallback	KEYWORD2
+showMessage	KEYWORD2
+clearMessage	KEYWORD2
+markDirty	KEYWORD2
+isMenuActive	KEYWORD2
+isEditActive	KEYWORD2
+currentScreen	KEYWORD2
+currentHomePage	KEYWORD2
+homePageCount	KEYWORD2
+getBrightness	KEYWORD2
+
+#######################################
+# Constants (LITERAL1 — teal)
+#######################################
+
+SCREEN_RIGHT	LITERAL1
+SCREEN_LEFT	LITERAL1
+ALERT_INFO	LITERAL1
+ALERT_WARNING	LITERAL1
+ALERT_CRITICAL	LITERAL1
+FIELD_INT	LITERAL1
+FIELD_FLOAT	LITERAL1
+FIELD_CHOICE	LITERAL1
+FIELD_BOOL	LITERAL1
+FIELD_ACTION	LITERAL1
+FIELD_READONLY	LITERAL1
+CC_CURSOR_EDIT	LITERAL1
+CC_DEGREE	LITERAL1
+APALCDGUI_VERSION	LITERAL1
+APA_LCD_MAX_SCREENS	LITERAL1
+APA_LCD_MAX_HOME_SCREENS	LITERAL1
+APA_LCD_ACTIVE_ALERT_QUEUE	LITERAL1
+APA_LCD_EEPROM_ADDR	LITERAL1
