@@ -36,6 +36,15 @@
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
 
+// ---- Optional DS3231 RTC support --------------------------------------------
+// Add -DAPA_LCD_USE_DS3231 to build_flags (PlatformIO) or define it before
+// this #include (Arduino IDE) to compile in the time/date edit modal.
+// The library includes Wire.h and DS3231.h automatically when the flag is set.
+#ifdef APA_LCD_USE_DS3231
+#include <Wire.h>
+#include <DS3231.h>
+#endif
+
 // ---- Version ----------------------------------------------------------------
 #define APALCDGUI_VERSION "1.1.1"
 
@@ -213,7 +222,7 @@ public:
                    const __FlashStringHelper* title = nullptr);
 
     // ---- RTC modal (optional — include DS3231.h before this header) ---------
-#ifdef __DS3231_h
+#ifdef APA_LCD_USE_DS3231
     /** Wire both-buttons-pressed to the built-in time/date edit modal.
      *  Ignored if setBothPressedCallback() has been registered.
      *  DS3231.h must be included before APALCDGUI.h. */
