@@ -1,6 +1,9 @@
 #include "APALCDGUI.h"
 #include <string.h>
 #include <stdio.h>
+#ifdef APA_LCD_USE_DS3231
+#include <DS3231.h>
+#endif
 
 // ---- Custom character bitmaps (internal — slot IDs are public in the header) ----
 static const uint8_t s_ccFilledRight[8] PROGMEM = {0x10,0x18,0x1C,0x1E,0x1C,0x18,0x10,0x00}; // slot 0 ►
@@ -287,7 +290,7 @@ bool APALCDGUI::addScreen(ScreenSide side, const FieldDef& f1, const FieldDef& f
     return true;
 }
 
-#ifdef __DS3231_h
+#ifdef APA_LCD_USE_DS3231
 void APALCDGUI::setRTC(DS3231* rtc) { _rtcPtr = (void*)rtc; }
 #endif
 
@@ -444,14 +447,15 @@ void APALCDGUI::_checkBothPress() {
             if (_bothCb) {
                 _bothCb();
             }
-#ifdef __DS3231_h
+#ifdef APA_LCD_USE_DS3231
             else if (_rtcPtr && _state != ST_RTC_NAV && _state != ST_RTC_EDIT) {
                 DS3231* rtc = (DS3231*)_rtcPtr;
-                _rtcVal[0][0] = rtc->getHour(false, false);
+                bool h12, pm, century;
+                _rtcVal[0][0] = rtc->getHour(h12, pm);
                 _rtcVal[0][1] = rtc->getMinute();
                 _rtcVal[0][2] = rtc->getSecond();
                 _rtcVal[1][0] = rtc->getDate();
-                _rtcVal[1][1] = rtc->getMonth(false);
+                _rtcVal[1][1] = rtc->getMonth(century);
                 _rtcVal[1][2] = rtc->getYear() + 2000;
                 _rtcSub = 0; _rtcCur = 0;
                 _setState(ST_RTC_NAV);
@@ -926,7 +930,7 @@ void APALCDGUI::_stateConfirm() {
 
 // ---- State: RTC_NAV --------------------------------------------------------
 void APALCDGUI::_stateRTCNav() {
-#ifndef __DS3231_h
+#ifndef APA_LCD_USE_DS3231
     _setState(ST_HOME); return;
 #else
     if (_dirty) {
@@ -963,7 +967,8 @@ void APALCDGUI::_stateRTCNav() {
     int32_t k2 = _encClicks(1);
     if (k2 != 0) {
         int16_t c = (int16_t)_rtcCur + (int16_t)k2;
-        if (c < 0) c = 4; if (c > 4) c = 0;
+        if (c < 0) c = 4;
+        if (c > 4) c = 0;
         _rtcCur = (uint8_t)c;
         _dirty = true;
     }
@@ -989,7 +994,7 @@ void APALCDGUI::_stateRTCNav() {
 
 // ---- State: RTC_EDIT -------------------------------------------------------
 void APALCDGUI::_stateRTCEdit() {
-#ifndef __DS3231_h
+#ifndef APA_LCD_USE_DS3231
     _setState(ST_HOME); return;
 #else
     int32_t k2 = _encClicks(1);
