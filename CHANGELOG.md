@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.3] — 2026-05-31
+
+### Fixed
+
+- Active alert queue: `postActiveAlert()` now resets `_alertHead` to the new slot when the queue was previously empty — prevents stale head from causing `_renderAlertScreen()` to display from a wrong (freed) slot after all alerts were acknowledged
+- `showMessage()` — added `const __FlashStringHelper*` overload; internal call `showMessage("Settings saved!")` changed to `showMessage(F("Settings saved!"))` — saves 16 bytes of SRAM on AVR (string literal no longer copied to data segment)
+- 4 × `char blank[21]; memset(...)` stack allocations replaced with `_rowWrite(r, "")` — `_rowWrite` already space-pads to COLS, so an empty string produces an identical blank row with no buffer needed
+- Custom character slot comment in header corrected: slots 0–6 are library-internal (slot 6 ↓ is used by `_renderActionBar` for the first-screen navigation indicator); only slot 7 is free for user characters
+- `APALCDGUI_VERSION` bumped to `"1.1.3"`
+
+---
+
 ## [1.1.2] — 2026-05-31
 
 ### Added
