@@ -232,7 +232,7 @@ void APALCDGUI::begin(
     _stateMs = millis(); _inputMs = millis();
     _menuSec = APALCDGUI_MENU_TIMEOUT_MS / 1000; _dirty = true;
     _editVal = 0.0f; _editIdx = 0;
-    _nScreens = 0; _homeCb = nullptr; _row2Cb = nullptr;
+    _nScreens = 0; _nHomeCbs = 0; _homeIdx = 0; _row2Cb = nullptr;
     _timeoutWarnSec = 0xFF;
     _longCb[0] = nullptr; _longCb[1] = nullptr;
     _bothCb = nullptr; _bothArmed = false; _bothFired = false; _bothMs = 0;
@@ -247,7 +247,12 @@ void APALCDGUI::begin(
 }
 
 // ---- Screen registration ---------------------------------------------------
-void APALCDGUI::setHomeCallback(void (*fn)(LiquidCrystal& lcd)) { _homeCb = fn; }
+bool APALCDGUI::addHomeScreen(void (*fn)(LiquidCrystal& lcd)) {
+    if (_nHomeCbs >= APA_LCD_MAX_HOME_SCREENS) return false;
+    _homeCbs[_nHomeCbs++] = fn;
+    return true;
+}
+void APALCDGUI::setHomeCallback(void (*fn)(LiquidCrystal& lcd)) { addHomeScreen(fn); }
 void APALCDGUI::setMenuRow2Callback(void (*fn)()) { _row2Cb = fn; }
 
 bool APALCDGUI::addScreen(ScreenSide side, const FieldDef& f1, void (*onSave)(),
@@ -325,10 +330,12 @@ void APALCDGUI::clearMessage() { _msgActive = false; _dirty = true; }
 void APALCDGUI::markDirty() { _dirty = true; }
 
 // ---- State queries ---------------------------------------------------------
-bool    APALCDGUI::isMenuActive()  const { return _state != ST_HOME; }
-bool    APALCDGUI::isEditActive()  const { return _state == ST_EDIT || _state == ST_RTC_EDIT; }
-int8_t  APALCDGUI::currentScreen() const { return _scrPos; }
-uint8_t APALCDGUI::getBrightness() const { return _bright; }
+bool    APALCDGUI::isMenuActive()    const { return _state != ST_HOME; }
+bool    APALCDGUI::isEditActive()    const { return _state == ST_EDIT || _state == ST_RTC_EDIT; }
+int8_t  APALCDGUI::currentScreen()   const { return _scrPos; }
+uint8_t APALCDGUI::getBrightness()   const { return _bright; }
+uint8_t APALCDGUI::currentHomePage() const { return _homeIdx; }
+uint8_t APALCDGUI::homePageCount()   const { return _nHomeCbs; }
 
 // ---- Passive alerts --------------------------------------------------------
 void APALCDGUI::postAlert(const char* l1, const char* l2, AlertLevel level) {
@@ -686,10 +693,17 @@ void APALCDGUI::_renderHome() {
         _renderAlertScreen();
         return;
     }
-    if (_homeCb) {
-        _homeCb(_lcd);
+    if (_nHomeCbs > 0) {
+        _homeCbs[_homeIdx](_lcd);
     } else {
         for (uint8_t r = 0; r < ROWS; r++) _rowWrite(r, "");
+    }
+    // Page indicator at row 3 cols 17–19 — drawn after callback so it always wins.
+    // Only shown when more than one home page is registered (single-page: no indicator).
+    if (_nHomeCbs > 1) {
+        char pgbuf[4];
+        snprintf(pgbuf, sizeof(pgbuf), "%d/%d", _homeIdx + 1, _nHomeCbs);
+        _padWrite(17, 3, pgbuf, 3);
     }
     _renderPassiveCorner();
 }
@@ -734,6 +748,17 @@ void APALCDGUI::_stateHome() {
             _setState(ST_NAV);
             return;
         }
+        _dirty = true;
+    }
+
+    // KB2 rotation: cycle home screen pages (only when no active alert covers the display)
+    int32_t k2 = _encClicks(1);
+    if (k2 != 0 && _nHomeCbs > 1 && !hasActiveAlert()) {
+        _touchInput();
+        int8_t next = (int8_t)_homeIdx + (k2 > 0 ? 1 : -1);
+        if (next < 0)                   next = (int8_t)_nHomeCbs - 1;
+        if ((uint8_t)next >= _nHomeCbs) next = 0;
+        _homeIdx = (uint8_t)next;
         _dirty = true;
     }
 
