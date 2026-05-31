@@ -235,7 +235,7 @@ void APALCDGUI::begin(
     _nScreens = 0; _homeCb = nullptr; _row2Cb = nullptr;
     _timeoutWarnSec = 0xFF;
     _longCb[0] = nullptr; _longCb[1] = nullptr;
-    _bothCb = nullptr; _bothArmed = false; _bothMs = 0;
+    _bothCb = nullptr; _bothArmed = false; _bothFired = false; _bothMs = 0;
     _msgActive = false; _msgUntilMs = 0;
     _passActive = false; _passFlash = false; _passFlashMs = 0;
     _passL1[0] = '\0'; _passL2[0] = '\0';
@@ -433,6 +433,10 @@ void APALCDGUI::_pollBtns() {
 }
 
 // ---- Both-press detection --------------------------------------------------
+// _bothCb (user callback): fires at APALCDGUI_BOTH_PRESS_MS (200 ms) — quick tap.
+// RTC modal: fires at APALCDGUI_LONG_PRESS_MS (800 ms) — deliberate hold of both buttons.
+// When either threshold fires, both longFired flags are set so _checkLongPress()
+// does not also fire for the individual buttons.
 void APALCDGUI::_checkBothPress() {
     bool b0 = (_enc[0].btnHeld != 0);
     bool b1 = (_enc[1].btnHeld != 0);
@@ -441,32 +445,43 @@ void APALCDGUI::_checkBothPress() {
         if (!_bothArmed) {
             _bothArmed = true;
             _bothMs    = now;
-        } else if (now - _bothMs >= APALCDGUI_BOTH_PRESS_MS) {
-            _bothArmed = false;
-            _touchInput();
-            if (_bothCb) {
+        } else {
+            uint32_t held = now - _bothMs;
+            // User callback: quick both-press (200 ms)
+            if (_bothCb && held >= APALCDGUI_BOTH_PRESS_MS && !_bothFired) {
+                _bothFired = true;
+                _enc[0].longFired = true;
+                _enc[1].longFired = true;
+                _touchInput();
                 _bothCb();
             }
+            // RTC modal: long hold of both buttons (800 ms)
 #ifdef APA_LCD_USE_DS3231
-            else if (_rtcPtr && _state != ST_RTC_NAV && _state != ST_RTC_EDIT) {
-                DS3231* rtc = (DS3231*)_rtcPtr;
-                bool h12, pm, century;
-                _rtcVal[0][0] = rtc->getHour(h12, pm);
-                _rtcVal[0][1] = rtc->getMinute();
-                _rtcVal[0][2] = rtc->getSecond();
-                _rtcVal[1][0] = rtc->getDate();
-                _rtcVal[1][1] = rtc->getMonth(century);
-                _rtcVal[1][2] = rtc->getYear() + 2000;
-                _rtcSub = 0; _rtcCur = 0;
-                _setState(ST_RTC_NAV);
+            else if (!_bothCb && held >= APALCDGUI_LONG_PRESS_MS && !_bothFired) {
+                _bothFired = true;
+                _enc[0].longFired = true;
+                _enc[1].longFired = true;
+                _touchInput();
+                if (_rtcPtr && _state != ST_RTC_NAV && _state != ST_RTC_EDIT) {
+                    DS3231* rtc = (DS3231*)_rtcPtr;
+                    bool h12, pm, century;
+                    _rtcVal[0][0] = rtc->getHour(h12, pm);
+                    _rtcVal[0][1] = rtc->getMinute();
+                    _rtcVal[0][2] = rtc->getSecond();
+                    _rtcVal[1][0] = rtc->getDate();
+                    _rtcVal[1][1] = rtc->getMonth(century);
+                    _rtcVal[1][2] = rtc->getYear() + 2000;
+                    _rtcSub = 0; _rtcCur = 0;
+                    _setState(ST_RTC_NAV);
+                } else if (_state == ST_RTC_NAV || _state == ST_RTC_EDIT) {
+                    _setState(ST_HOME);
+                }
             }
 #endif
-            else if (_state == ST_RTC_NAV || _state == ST_RTC_EDIT) {
-                _setState(ST_HOME);
-            }
         }
     } else {
         _bothArmed = false;
+        _bothFired = false;
     }
 }
 
@@ -948,21 +963,17 @@ void APALCDGUI::_stateRTCNav() {
         }
         _rowWrite(1, r1);
         char r2[COLS+1]; memset(r2,' ',COLS); r2[COLS]='\0';
-        for(uint8_t f=0;f<3;f++){
-            uint8_t c=f*6+2;
-            r2[c+1]=(uint8_t)(_rtcCur==f ? 6 : 5);
-        }
+        if (_rtcCur < 3) { r2[_rtcCur*6+3]=(uint8_t)5; }  // slot 5 = ↑ below selected field
         _rowWrite(2, r2);
         _lcd.setCursor(0,3);
-        _lcd.write(_rtcCur==3 ? '>' : ' ');
-        _lcd.print(F("*BACK        "));
-        _lcd.write(_rtcCur==4 ? '>' : ' ');
-        _lcd.print(F("*SAVE"));
+        _lcd.write(_rtcCur==3 ? (uint8_t)CC_CURSOR_EDIT : ' ');
+        _lcd.print(F("BACK         "));
+        _lcd.write(_rtcCur==4 ? (uint8_t)CC_CURSOR_EDIT : ' ');
+        _lcd.print(F("SAVE"));
         _dirty = false;
     }
 
-    int32_t k1 = _encClicks(0);
-    if (k1 != 0) { _rtcSub = (_rtcSub + 1) & 1; _dirty = true; }
+    _encClicks(0);  // consume knob1 rotation — no action in RTC modal
 
     int32_t k2 = _encClicks(1);
     if (k2 != 0) {
@@ -976,17 +987,21 @@ void APALCDGUI::_stateRTCNav() {
     if (_enc[1].pressed) {
         if (_rtcCur < 3) {
             _setState(ST_RTC_EDIT);
-        } else if (_rtcCur == 3) {
-            _setState(ST_HOME);
-        } else {
-            DS3231* rtc = (DS3231*)_rtcPtr;
-            rtc->setSecond(_rtcVal[0][2]);
-            rtc->setMinute(_rtcVal[0][1]);
-            rtc->setHour(_rtcVal[0][0]);
-            rtc->setDate(_rtcVal[1][0]);
-            rtc->setMonth(_rtcVal[1][1]);
-            rtc->setYear(_rtcVal[1][2] - 2000);
-            _setState(ST_HOME);
+        } else if (_rtcCur == 3) {  // BACK
+            if (_rtcSub == 1) { _rtcSub = 0; _rtcCur = 0; _dirty = true; }  // DATE → TIME
+            else               { _setState(ST_HOME); }                        // TIME → discard
+        } else {                    // SAVE
+            if (_rtcSub == 0) { _rtcSub = 1; _rtcCur = 0; _dirty = true; }  // TIME → DATE
+            else {
+                DS3231* rtc = (DS3231*)_rtcPtr;
+                rtc->setSecond(_rtcVal[0][2]);
+                rtc->setMinute(_rtcVal[0][1]);
+                rtc->setHour(_rtcVal[0][0]);
+                rtc->setDate(_rtcVal[1][0]);
+                rtc->setMonth(_rtcVal[1][1]);
+                rtc->setYear(_rtcVal[1][2] - 2000);
+                _setState(ST_HOME);
+            }
         }
     }
 #endif
