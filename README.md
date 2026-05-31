@@ -1,7 +1,7 @@
 # APALCDGUI
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.1.4](https://img.shields.io/badge/version-1.1.4-blue)
+· ![v1.1.5](https://img.shields.io/badge/version-1.1.5-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -422,6 +422,7 @@ See `examples/04_rtc/04_rtc.ino` for a full working example with live clock disp
 | `examples/02_8screens/` | All 6 field types across 8 screens — best starting point for new projects |
 | `examples/03_alerts/` | Passive and active alert system demonstration |
 | `examples/04_rtc/` | DS3231 real-time clock — live time display and time/date set modal |
+| `examples/05_multi_home/` | Three scrollable home pages with automatic page indicator |
 
 ---
 
@@ -440,15 +441,15 @@ Define these **before** `#include <APALCDGUI.h>`:
 
 ## Platform Verification
 
-Compiled and size-checked with the 8-screen example (`APA_LCD_MAX_SCREENS=8`) on all supported platforms. Zero errors, zero library warnings.
+Compiled and size-checked with the 5-screen multi-home example (`APA_LCD_MAX_SCREENS=8`) on all supported platforms. Zero errors, zero library warnings.
 
 | Platform | Board | Clock | RAM used | RAM total | Flash used | Flash total |
 |----------|-------|-------|----------|-----------|------------|-------------|
-| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 678 B | 8 192 B (20%) | 19 446 B | 253 952 B (8%) |
-| Arduino Uno | ATmega328P | 16 MHz | 1 666 B | 2 048 B (81%) | 17 546 B | 32 256 B (54%) |
-| ESP32 DevKit | ESP32 | 240 MHz | 23 916 B | 327 680 B (7%) | 297 729 B | 1 310 720 B (23%) |
-| ESP8266 D1 Mini | ESP8266 | 80 MHz | 30 536 B | 81 920 B (37%) | 282 267 B | 1 044 464 B (27%) |
-| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 988 B | 20 480 B (19%) | 36 800 B | 65 536 B (56%) |
+| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 687 B | 8 192 B (21%) | 20 358 B | 253 952 B (8%) |
+| Arduino Uno | ATmega328P | 16 MHz | 1 675 B | 2 048 B (82%) | 18 456 B | 32 256 B (57%) |
+| ESP32 DevKit | ESP32 | 240 MHz | 23 932 B | 327 680 B (7%) | 298 269 B | 1 310 720 B (23%) |
+| ESP8266 D1 Mini | ESP8266 | 80 MHz | 30 564 B | 81 920 B (37%) | 282 871 B | 1 044 464 B (27%) |
+| STM32 Bluepill | STM32F103C8 | 72 MHz | 4 016 B | 20 480 B (20%) | 37 416 B | 65 536 B (57%) |
 
 > The Uno row shows 81% RAM with the 8-screen example — that is the example sketch overhead including 8 `float` / `int16_t` globals and 8 screen registrations. The library core alone compiles cleanly. For production Uno use, a simpler 2–4 screen sketch will sit well below 50%.
 >
