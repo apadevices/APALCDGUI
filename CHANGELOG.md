@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.5] — 2026-05-31
+
+### Added
+
+- `examples/05_multi_home/` — three-page scrollable home screen example; demonstrates `addHomeScreen()`, automatic page indicator, and the column 17–19 layout constraint across all 6 field types and 8 screens
+
+### Changed
+
+- `APALCDGUI_VERSION` bumped to `"1.1.5"`
+- Platform Verification table in README updated from 02_8screens to 05_multi_home numbers
+
+---
+
 ## [1.1.4] — 2026-05-31
 
 ### Added
