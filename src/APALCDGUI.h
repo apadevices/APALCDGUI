@@ -46,7 +46,7 @@
 #endif
 
 // ---- Version ----------------------------------------------------------------
-#define APALCDGUI_VERSION "1.1.3"
+#define APALCDGUI_VERSION "1.1.4"
 
 // ---- Capacity — define BEFORE #include to override --------------------------
 // These control compile-time array sizes; defining them after #include has no effect.
@@ -56,6 +56,10 @@
 
 #ifndef APA_LCD_ACTIVE_ALERT_QUEUE
 #define APA_LCD_ACTIVE_ALERT_QUEUE 3   // max simultaneous active alerts in the queue
+#endif
+
+#ifndef APA_LCD_MAX_HOME_SCREENS
+#define APA_LCD_MAX_HOME_SCREENS 4     // max home screen pages scrolled by KB2
 #endif
 
 // ---- EEPROM base address — define before #include only if address 500 collides -----------
@@ -173,13 +177,16 @@ public:
 
     // ---- Screen registration ------------------------------------------------
 
-    /** Set the home screen draw callback.
-     *  fn is called on every update() while the operator is at the HOME position.
-     *  Keep fn fast — it runs every loop() iteration and must never call delay().
-     *  The LiquidCrystal& parameter lets you write to the LCD without a global variable.
-     *  This is the only callback that receives a parameter; all others — onSave,
-     *  ackCallback, long-press, both-press — are plain void(void) functions.
-     *  If not set, the home screen stays blank. */
+    /** Register a home screen page.
+     *  Call once for a single home screen or multiple times for a scrollable dashboard —
+     *  KB2 rotation cycles through the pages when more than one is registered.
+     *  fn is called on every update() while that page is shown — keep it fast, no delay().
+     *  The LiquidCrystal& parameter is the only callback that receives a parameter;
+     *  all other callbacks (onSave, ackCallback, long-press) are plain void(void).
+     *  Returns false if APA_LCD_MAX_HOME_SCREENS is already reached. */
+    bool addHomeScreen(void (*fn)(LiquidCrystal& lcd));
+
+    /** Alias for addHomeScreen() — single-screen sketches need no changes. */
     void setHomeCallback(void (*fn)(LiquidCrystal& lcd));
 
     /** Set a live-data callback drawn on row 2 of every 1- and 2-field submenu screen.
@@ -395,6 +402,15 @@ public:
 
     // ---- State queries ------------------------------------------------------
 
+    /** Returns the 0-based index of the home screen page currently shown.
+     *  Use inside your home callback to draw a page indicator:
+     *    if (gui.homePageCount() > 1)
+     *        snprintf(buf, ..., "%d/%d", gui.currentHomePage()+1, gui.homePageCount()); */
+    uint8_t currentHomePage() const;
+
+    /** Returns the number of home screen pages registered with addHomeScreen(). */
+    uint8_t homePageCount() const;
+
     /** Returns true when the operator is in any submenu screen (not at HOME). */
     bool isMenuActive() const;
 
@@ -462,7 +478,9 @@ private:
     // ---- Screen registry ----------------------------------------------------
     Screen   _screens[APA_LCD_MAX_SCREENS];
     uint8_t  _nScreens;
-    void   (*_homeCb)(LiquidCrystal&);
+    void   (*_homeCbs[APA_LCD_MAX_HOME_SCREENS])(LiquidCrystal&);
+    uint8_t  _nHomeCbs;   // number of registered home pages
+    uint8_t  _homeIdx;    // currently displayed home page (0-based)
     void   (*_row2Cb)();
 
     // ---- UI state -----------------------------------------------------------
