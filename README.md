@@ -1,7 +1,7 @@
 # APALCDGUI
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.1.2](https://img.shields.io/badge/version-1.1.2-blue)
+· ![v1.1.4](https://img.shields.io/badge/version-1.1.4-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -13,6 +13,7 @@
 - Two PEC11R quadrature rotary encoders, native ISR decoding — no external library
 - 9-state non-blocking machine: HOME, NAV, EDIT, FLASH_SAVE, FLASH_BACK, BRIGHTNESS, CONFIRM, RTC_NAV, RTC_EDIT
 - Up to 4 submenu screens per side (left / right), configurable via `APA_LCD_MAX_SCREENS`
+- Multiple home screen pages — register up to 4 via `addHomeScreen()`, scroll with KB2 rotation
 - 1, 2, or 3 fields per screen: INT, FLOAT, CHOICE, BOOL, ACTION, or READONLY
 
 ### Alert system
@@ -63,6 +64,7 @@ APALCDGUI drives a 20-column × 4-row parallel LCD and two rotary encoders as a 
 
 ```
 HOME ──── knob1 (right) rotates ─────────────────► NAV (submenu screen)
+     ──── knob2 (left) rotates ──────────────────► next / previous home page
      ◄─── menu timeout (60 s) ─────────────────────
      ◄─── BACK confirmed ──────────────────────────
 
@@ -77,7 +79,7 @@ Both buttons pressed ───────────────────�
 Hold KB1 + rotate knob1 ─────────────────────────► BRIGHTNESS adjust
 ```
 
-### 20×4 screen layout
+### Submenu screen layout
 
 ```
       0         1         2
@@ -94,6 +96,24 @@ Row3: ►BACK    →2/4    ►SAVE
 - Cols 18–19: unit (2 chars)
 - Row 2 cols 0–16: `setMenuRow2Callback` output or optional screen title
 - Row 2 cols 17–19: `[i]` info / `[*]` warning / `[!]` critical alert indicator
+
+### Home screen layout
+
+The home screen is fully drawn by your callback(s). The library overlays two elements on top:
+
+```
+      0         1         2
+      01234567890123456789
+Row0: pH  7.24  ORP 680mV          ← your callback writes all four rows
+Row1: Cl  1.2   Temp  26°C
+Row2: Filter ON          [!]       ← cols 17–19: passive alert indicator (library)
+Row3: System OK          2/3       ← cols 17–19: page indicator (library, only when > 1 page)
+```
+
+- Rows 0–3 cols 0–16 are entirely yours — write whatever you need.
+- **Row 2 cols 17–19**: passive alert indicator, always drawn by the library.
+- **Row 3 cols 17–19**: page indicator (`1/3`, `2/3`, …) drawn automatically when more than one home page is registered. Only 1 page → no indicator, those 3 cols are yours.
+- If your callback writes to cols 17–19 of rows 2 or 3, the library overwrites it — avoid those positions.
 
 ---
 
@@ -132,6 +152,79 @@ void loop() {
     gui.update(); // non-blocking — call every loop()
 }
 ```
+
+---
+
+## Multiple Home Screens
+
+Register up to 4 home pages with `addHomeScreen()`. When more than one page is registered, the operator scrolls between them by rotating **knob2 (left knob)** while on the home screen. The library automatically draws a page indicator (`1/3`, `2/3`, `3/3`) at **row 3 cols 17–19** so the operator always knows how many pages there are and which one is showing.
+
+`setHomeCallback()` still works as before — it is an alias for `addHomeScreen()`, so single-page sketches need no changes.
+
+```cpp
+#include <APALCDGUI.h>
+
+APALCDGUI gui;
+
+// Page 1 — main sensor readings
+void drawPage1(LiquidCrystal& lcd) {
+    lcd.setCursor(0, 0); lcd.print(F("pH  7.24  ORP 680mV "));
+    lcd.setCursor(0, 1); lcd.print(F("Cl  1.2   Temp  26  "));
+    lcd.write(CC_DEGREE);                                       // ° at current cursor position
+    lcd.setCursor(0, 2); lcd.print(F("Filter ON   12:34   "));
+    lcd.setCursor(0, 3); lcd.print(F("System OK           "));
+    // cols 17–19 of row 3 are the page indicator — do not write there
+}
+
+// Page 2 — weekly totals
+void drawPage2(LiquidCrystal& lcd) {
+    lcd.setCursor(0, 0); lcd.print(F("Acid doses this week"));
+    lcd.setCursor(0, 1); lcd.print(F("pH-:  14  CL+:  22  "));
+    lcd.setCursor(0, 2); lcd.print(F("Last dose: 12:10    "));
+    lcd.setCursor(0, 3); lcd.print(F("Weekly total: 136 ml"));
+}
+
+// Page 3 — system status
+void drawPage3(LiquidCrystal& lcd) {
+    lcd.setCursor(0, 0); lcd.print(F("Uptime:  3d 14h 22m "));
+    lcd.setCursor(0, 1); lcd.print(F("EEPROM writes:  1024"));
+    lcd.setCursor(0, 2); lcd.print(F("Backlight:   200/255"));
+    lcd.setCursor(0, 3); lcd.print(F("Firmware:   v1.1.4  "));
+}
+
+void setup() {
+    gui.begin();
+    gui.addHomeScreen(drawPage1);  // page 1 — shown first
+    gui.addHomeScreen(drawPage2);  // page 2
+    gui.addHomeScreen(drawPage3);  // page 3
+    // gui.addScreen(...) for submenus as usual
+}
+
+void loop() { gui.update(); }
+```
+
+**What the operator sees on page 2 of 3:**
+```
+      0         1         2
+      01234567890123456789
+Row0: Acid doses this week
+Row1: pH-:  14  CL+:  22
+Row2: Last dose: 12:10    [!]
+Row3: Weekly total: 136 ml2/3
+```
+
+### Important layout constraint
+
+The library writes at fixed positions on the home screen regardless of what your callback draws there:
+
+| Position | What the library writes | Condition |
+|----------|------------------------|-----------|
+| Row 2 cols 17–19 | `[i]`, `[*]`, or `[!]` — passive alert indicator | always |
+| Row 3 cols 17–19 | `1/3`, `2/3`, `3/3` — page indicator | only when `> 1` page registered |
+
+If your callback writes anything to those positions, the library overwrites it on every `update()`. Leave them blank in your callbacks.
+
+When only **one** page is registered (or `setHomeCallback()` used for a single screen), no page indicator is drawn and all 20 columns of row 3 belong to your callback.
 
 ---
 
@@ -200,7 +293,8 @@ fieldReadonly(label, unit, float* val, decimals)
 
 | Method | Description |
 |--------|-------------|
-| `setHomeCallback(fn)` | Home screen draw function. Receives `LiquidCrystal&` — the only callback with a parameter. |
+| `addHomeScreen(fn)` | Register a home page. Call multiple times for a scrollable dashboard (KB2 scrolls pages). Returns `false` if `APA_LCD_MAX_HOME_SCREENS` is reached. |
+| `setHomeCallback(fn)` | Alias for `addHomeScreen()` — single-page sketches need no changes. |
 | `setMenuRow2Callback(fn)` | Draw live sensor data on row 2 of every 1- and 2-field screen (cols 0–16 only). |
 | `addScreen(side, field1, onSave, title)` | Register a 1-field screen. |
 | `addScreen(side, field1, field2, onSave, title)` | Register a 2-field screen (most common). |
@@ -249,6 +343,8 @@ fieldReadonly(label, unit, float* val, decimals)
 | `isMenuActive()` | True when not at HOME. |
 | `isEditActive()` | True during EDIT or RTC_EDIT state. |
 | `currentScreen()` | Screen position: `0` = HOME, `+N` = right screen N, `-N` = left screen N. |
+| `currentHomePage()` | Index of the currently displayed home page (0-based). |
+| `homePageCount()` | Number of home pages registered via `addHomeScreen()`. |
 | `getBrightness()` | Current backlight level (0–255, EEPROM-persisted). |
 
 ---
@@ -335,6 +431,7 @@ Define these **before** `#include <APALCDGUI.h>`:
 
 ```cpp
 #define APA_LCD_MAX_SCREENS        4    // total submenu screens left+right (default 4)
+#define APA_LCD_MAX_HOME_SCREENS   4    // home screen pages scrolled by KB2 (default 4)
 #define APA_LCD_ACTIVE_ALERT_QUEUE 3    // simultaneous active alerts (default 3)
 #define APA_LCD_EEPROM_ADDR      500    // EEPROM base address (default 500, uses 2 bytes)
 ```
@@ -362,3 +459,7 @@ Compiled and size-checked with the 8-screen example (`APA_LCD_MAX_SCREENS=8`) on
 ## License
 
 MIT — see LICENSE file.
+
+---
+
+*APALCDGUI — APA Devices · [kecup@vazac.eu](mailto:kecup@vazac.eu)*
