@@ -314,6 +314,11 @@ void APALCDGUI::showMessage(const char* l1, const char* l2, uint16_t ms) {
     strncpy(_msgL2, l2 ? l2 : "", COLS); _msgL2[COLS] = '\0';
     _msgActive = true; _msgUntilMs = millis() + ms; _dirty = true;
 }
+void APALCDGUI::showMessage(const __FlashStringHelper* l1, const __FlashStringHelper* l2, uint16_t ms) {
+    _fstr(_msgL1, l1, COLS);
+    _fstr(_msgL2, l2, COLS);
+    _msgActive = true; _msgUntilMs = millis() + ms; _dirty = true;
+}
 void APALCDGUI::clearMessage() { _msgActive = false; _dirty = true; }
 
 // ---- Display control -------------------------------------------------------
@@ -340,22 +345,26 @@ bool APALCDGUI::hasAlert() const  { return _passActive; }
 
 // ---- Active alerts ---------------------------------------------------------
 void APALCDGUI::postActiveAlert(const char* l1, const char* l2, AlertLevel level, void (*cb)()) {
-    if (_alertCount() >= APA_LCD_ACTIVE_ALERT_QUEUE) return;
+    uint8_t count = _alertCount();
+    if (count >= APA_LCD_ACTIVE_ALERT_QUEUE) return;
     for (uint8_t i = 0; i < APA_LCD_ACTIVE_ALERT_QUEUE; i++) {
         if (!_alertQ[i].used) {
             strncpy(_alertQ[i].l1, l1 ? l1 : "", 16); _alertQ[i].l1[16] = '\0';
             strncpy(_alertQ[i].l2, l2 ? l2 : "", 16); _alertQ[i].l2[16] = '\0';
             _alertQ[i].level = level; _alertQ[i].ackCb = cb; _alertQ[i].used = true;
+            if (count == 0) _alertHead = i;  // reset stale head when queue was empty
             _dirty = true; return;
         }
     }
 }
 void APALCDGUI::postActiveAlert(const __FlashStringHelper* l1, const __FlashStringHelper* l2, AlertLevel level, void (*cb)()) {
-    if (_alertCount() >= APA_LCD_ACTIVE_ALERT_QUEUE) return;
+    uint8_t count = _alertCount();
+    if (count >= APA_LCD_ACTIVE_ALERT_QUEUE) return;
     for (uint8_t i = 0; i < APA_LCD_ACTIVE_ALERT_QUEUE; i++) {
         if (!_alertQ[i].used) {
             _fstr(_alertQ[i].l1, l1, 16); _fstr(_alertQ[i].l2, l2, 16);
             _alertQ[i].level = level; _alertQ[i].ackCb = cb; _alertQ[i].used = true;
+            if (count == 0) _alertHead = i;  // reset stale head when queue was empty
             _dirty = true; return;
         }
     }
@@ -646,14 +655,12 @@ void APALCDGUI::_renderMenu() {
 
     // On 1-field screens row 1 needs clearing
     if (s->fieldCount == 1) {
-        char blank[COLS + 1]; memset(blank, ' ', COLS); blank[COLS] = '\0';
-        _rowWrite(1, blank);
+        _rowWrite(1, "");
     }
 
     // Row 2: only available when fieldCount < 3 (otherwise the third field owns it)
     if (s->fieldCount < 3) {
-        char blank[COLS + 1]; memset(blank, ' ', COLS); blank[COLS] = '\0';
-        _rowWrite(2, blank);
+        _rowWrite(2, "");
         if (_timeoutWarnSec != 0xFF) {
             // Countdown overrides everything else on row 2
             char buf[COLS + 1];
@@ -682,10 +689,7 @@ void APALCDGUI::_renderHome() {
     if (_homeCb) {
         _homeCb(_lcd);
     } else {
-        for (uint8_t r = 0; r < ROWS; r++) {
-            char blank[COLS + 1]; memset(blank, ' ', COLS); blank[COLS] = '\0';
-            _rowWrite(r, blank);
-        }
+        for (uint8_t r = 0; r < ROWS; r++) _rowWrite(r, "");
     }
     _renderPassiveCorner();
 }
@@ -875,7 +879,7 @@ void APALCDGUI::_stateFlashSave() {
         if (s && s->onSave) s->onSave();
         _curPos = s ? s->fieldCount : 2; // land cursor on BACK after save
         _setState(ST_NAV);
-        showMessage("Settings saved!", nullptr, 1000);
+        showMessage(F("Settings saved!"), nullptr, 1000);
     }
 }
 
@@ -897,8 +901,7 @@ void APALCDGUI::_stateFlashBack() {
 void APALCDGUI::_stateBrightness() {
     char buf[COLS + 1];
     if (_dirty) {
-        char blank[COLS + 1]; memset(blank, ' ', COLS); blank[COLS] = '\0';
-        _rowWrite(0, blank);
+        _rowWrite(0, "");
         _rowWrite(1, "  Brightness adj    ");
         snprintf(buf, sizeof(buf), "  Brightness: %3d  ", _bright);
         _rowWrite(2, buf);
@@ -1057,8 +1060,7 @@ void APALCDGUI::update() {
         } else {
             if (_dirty) {
                 _rowWrite(0, _msgL1); _rowWrite(1, _msgL2);
-                char blank[COLS+1]; memset(blank,' ',COLS); blank[COLS]='\0';
-                _rowWrite(2, blank); _rowWrite(3, blank);
+                _rowWrite(2, ""); _rowWrite(3, "");
                 _dirty = false;
             }
             return;
