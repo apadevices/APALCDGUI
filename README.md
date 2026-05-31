@@ -1,7 +1,7 @@
 # APALCDGUI
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.1.5](https://img.shields.io/badge/version-1.1.5-blue)
+· ![v1.1.6](https://img.shields.io/badge/version-1.1.6-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
