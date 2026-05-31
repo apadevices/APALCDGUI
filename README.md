@@ -277,7 +277,7 @@ dose1.setAlarmCallback([](AlarmType alarm) {
 
 ## DS3231 RTC — Time and Date Setting
 
-The library includes a built-in time/date edit modal for the DS3231 module. It is compiled in automatically when `DS3231.h` is included **before** `APALCDGUI.h` — if the include order is reversed, the modal is silently disabled.
+The library includes a built-in time/date edit modal for the DS3231 module. Enable it by defining `APA_LCD_USE_DS3231` — the library then pulls in `Wire.h` and `DS3231.h` automatically.
 
 **Wiring (Mega 2560):** SDA → pin 20, SCL → pin 21, VCC → 3.3 V, GND → GND.
 
@@ -286,19 +286,24 @@ The library includes a built-in time/date edit modal for the DS3231 module. It i
 lib_deps =
     arduino-libraries/LiquidCrystal @ ^1.0.7
     NorthernWidget/DS3231
+build_flags = -DAPA_LCD_USE_DS3231
+```
+
+**Arduino IDE** — add before `#include`:
+```cpp
+#define APA_LCD_USE_DS3231
+#include <APALCDGUI.h>
 ```
 
 **Sketch:**
 ```cpp
-#include <Wire.h>
-#include <DS3231.h>      // ← MUST come before APALCDGUI.h
-#include <APALCDGUI.h>
+#include <APALCDGUI.h>   // Wire.h and DS3231.h are included automatically
 
 APALCDGUI gui;
 DS3231    rtc;
 
 void setup() {
-    Wire.begin();
+    Wire.begin();        // required — initialise I2C bus
     gui.begin();
     gui.setRTC(&rtc);   // wires both-buttons gesture to the modal
     // addScreen() calls ...
