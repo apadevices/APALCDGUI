@@ -1,4 +1,4 @@
-# APALCDGUI API Reference — v1.1.4
+# APALCDGUI API Reference — v1.1.5
 
 ## Quick-start examples
 
