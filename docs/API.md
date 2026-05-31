@@ -1,4 +1,4 @@
-# APALCDGUI API Reference — v1.1.2
+# APALCDGUI API Reference — v1.1.4
 
 ## Quick-start examples
 
@@ -34,9 +34,11 @@ void drawHome(LiquidCrystal& lcd) {
     snprintf(buf, sizeof(buf), "pH%s  ORP%3dmV ", fa, g_orp);
     lcd.setCursor(0, 0); lcd.print(buf);
     lcd.setCursor(0, 3); lcd.print(F("K1:screens K2:edit  "));
+    // Note: do NOT write to row 2 cols 17–19 (alert indicator) or
+    //       row 3 cols 17–19 (page indicator when > 1 page) — library overwrites them.
 }
 // ...
-gui.setHomeCallback(drawHome);
+gui.addHomeScreen(drawHome);  // or gui.setHomeCallback(drawHome) — identical
 ```
 
 ---
@@ -47,7 +49,8 @@ gui.setHomeCallback(drawHome);
 |------|------|-------|
 | 1 | `APALCDGUI gui;` | Global — constructs with LCD pin defaults |
 | 2 | `gui.begin()` | In `setup()` — init LCD, encoders, EEPROM |
-| 3 | `gui.setHomeCallback(fn)` | Optional — draw your home screen |
+| 3 | `gui.addHomeScreen(fn)` | Optional — register home page(s); call multiple times for scrollable dashboard |
+| 3a | `gui.setHomeCallback(fn)` | Alias for `addHomeScreen()` — single-page sketches need no changes |
 | 4 | `gui.setMenuRow2Callback(fn)` | Optional — live data on menu row 2 |
 | 5 | `gui.addScreen(...)` | Register as many screens as needed |
 | 6 | `gui.setLongPressCallback(...)` | Optional — override KB2 long-press |
@@ -105,11 +108,53 @@ Runs all GUI logic: reads encoders, processes button presses, handles timeouts, 
 
 ## Screen registration
 
+### `addHomeScreen()`
+```cpp
+bool addHomeScreen(void (*fn)(LiquidCrystal& lcd));
+```
+Registers a home screen page. Call once for a single page, or multiple times for a scrollable dashboard — the operator scrolls between pages by rotating **knob2 (left knob)** while on the home screen.
+
+`fn` is called on every `update()` while that page is shown. Keep it fast — no `delay()`, no blocking calls. **The only callback that receives a parameter** — all others are `void(void)`.
+
+Returns `false` if `APA_LCD_MAX_HOME_SCREENS` is already reached (default 4). To increase the limit, define it before `#include`:
+```cpp
+#define APA_LCD_MAX_HOME_SCREENS 6
+#include <APALCDGUI.h>
+```
+
+**Automatic page indicator:** when more than one page is registered, the library draws `n/N` at **row 3 cols 17–19** after the callback returns. Do not write to that position in your callbacks — the library overwrites it on every `update()`. When only one page is registered, no indicator is drawn and all 20 columns of row 3 are yours.
+
+**Example — two-page dashboard:**
+```cpp
+void drawPage1(LiquidCrystal& lcd) {
+    lcd.setCursor(0, 0); lcd.print(F("pH  7.24  ORP 680mV "));
+    lcd.setCursor(0, 1); lcd.print(F("Cl  1.2   Temp  26  "));
+    lcd.write(CC_DEGREE);
+    lcd.setCursor(0, 2); lcd.print(F("Filter ON   12:34   "));
+    lcd.setCursor(0, 3); lcd.print(F("System OK           "));
+    // row 3 cols 17–19: written by library as "1/2"
+}
+
+void drawPage2(LiquidCrystal& lcd) {
+    lcd.setCursor(0, 0); lcd.print(F("Acid doses this week"));
+    lcd.setCursor(0, 1); lcd.print(F("pH-:  14  CL+:  22  "));
+    lcd.setCursor(0, 2); lcd.print(F("Last dose:   12:10  "));
+    lcd.setCursor(0, 3); lcd.print(F("Total this week 136 "));
+    // row 3 cols 17–19: written by library as "2/2"
+}
+
+void setup() {
+    gui.begin();
+    gui.addHomeScreen(drawPage1);
+    gui.addHomeScreen(drawPage2);
+}
+```
+
 ### `setHomeCallback()`
 ```cpp
 void setHomeCallback(void (*fn)(LiquidCrystal& lcd));
 ```
-Registers the home screen draw function. Called on every `update()` while at HOME. Keep it fast — no `delay()`, no blocking calls. **The only callback that receives a parameter** — all others are `void(void)`.
+Alias for `addHomeScreen()`. Existing single-page sketches that call `setHomeCallback()` compile and run unchanged.
 
 ### `setMenuRow2Callback()`
 ```cpp
@@ -366,11 +411,15 @@ Call when application data displayed on the current screen changes outside of a 
 ## State queries
 
 ```cpp
-bool    isMenuActive()   const;   // true when not at HOME
-bool    isEditActive()   const;   // true during field or RTC edit
-int8_t  currentScreen()  const;   // 0=HOME, +N=right screen N, -N=left screen N
-uint8_t getBrightness()  const;   // current backlight level (0–255, EEPROM-persisted)
+bool    isMenuActive()    const;  // true when not at HOME
+bool    isEditActive()    const;  // true during field or RTC edit
+int8_t  currentScreen()   const;  // 0=HOME, +N=right screen N, -N=left screen N
+uint8_t currentHomePage()  const;  // 0-based index of the currently displayed home page
+uint8_t homePageCount()    const;  // number of home pages registered via addHomeScreen()
+uint8_t getBrightness()    const;  // current backlight level (0–255, EEPROM-persisted)
 ```
+
+`currentHomePage()` and `homePageCount()` let application code react to which dashboard page is visible — for example, to show a different indicator LED or enable a different data refresh. They are read-only; page selection is always by the operator (KB2 rotation).
 
 ---
 
@@ -401,6 +450,7 @@ enum FieldType   : uint8_t { FIELD_INT, FIELD_FLOAT, FIELD_CHOICE,
 
 ```cpp
 #define APA_LCD_MAX_SCREENS        4    // total submenu screens left+right (default 4)
+#define APA_LCD_MAX_HOME_SCREENS   4    // home screen pages scrolled by KB2 (default 4)
 #define APA_LCD_ACTIVE_ALERT_QUEUE 3    // simultaneous active alerts (default 3)
 #define APA_LCD_EEPROM_ADDR      500    // EEPROM base address (default 500, uses 2 bytes)
 ```
@@ -441,6 +491,10 @@ Two bytes at `APA_LCD_EEPROM_ADDR` (default 500):
 | 501 | Validity marker (0xAE) |
 
 On ESP32 / ESP8266: `EEPROM.begin()` and `EEPROM.commit()` are called automatically.
+
+---
+
+*APALCDGUI — APA Devices · [kecup@vazac.eu](mailto:kecup@vazac.eu)*
 
 ---
 
