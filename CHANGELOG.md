@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.6] — 2026-05-31
+
+### Added
+
+- `keywords.txt` — IDE keyword colouring for all public methods, types, and constants
+
+### Fixed
+
+- `library.properties` `sentence` and `paragraph` trailing periods removed — Arduino Library Manager appends its own period; double period was appearing in the registry
+
+### Changed
+
+- `APALCDGUI_VERSION` bumped to `"1.1.6"`
+
+---
+
 ## [1.1.5] — 2026-05-31
 
 ### Added
