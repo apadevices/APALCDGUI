@@ -1,7 +1,7 @@
 # APALCDGUI
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.1.1](https://img.shields.io/badge/version-1.1.1-blue)
+· ![v1.1.2](https://img.shields.io/badge/version-1.1.2-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -205,7 +205,7 @@ fieldReadonly(label, unit, float* val, decimals)
 | `addScreen(side, field1, onSave, title)` | Register a 1-field screen. |
 | `addScreen(side, field1, field2, onSave, title)` | Register a 2-field screen (most common). |
 | `addScreen(side, field1, field2, field3, onSave, title)` | Register a 3-field screen. |
-| `setRTC(DS3231*)` | Wire both-pressed gesture to built-in time/date modal. Requires `DS3231.h` before `APALCDGUI.h`. |
+| `setRTC(DS3231*)` | Wire 800 ms both-buttons-hold gesture to built-in time/date modal. Requires build flag `-DAPA_LCD_USE_DS3231`. |
 
 ### Field factories
 
@@ -310,11 +310,22 @@ void setup() {
 }
 ```
 
-**Operation:** press both buttons within 200 ms → the modal opens. Knob1 switches between the TIME and DATE sub-screens. Knob2 moves the cursor; press to edit, rotate to change, press to confirm. Cursor on SAVE + press writes to the chip. Cursor on BACK + press discards.
+**Operation:** hold both buttons for 800 ms → the TIME screen opens. Knob2 moves the cursor between the three time fields (HH / MM / SS); press to enter edit, rotate to change, press to confirm the new value. Press SAVE to advance to the DATE screen (DD / MM / YYYY). Press SAVE again to write all values to the DS3231 and return to HOME. BACK on the DATE screen returns to TIME; BACK on the TIME screen discards all changes.
 
 > `setBothPressedCallback()` takes priority over the RTC modal — do not set it if you want the modal to work.
 
-See `examples/mega/03_rtc/03_rtc.ino` for a full working example with live clock display on the home screen.
+See `examples/04_rtc/04_rtc.ino` for a full working example with live clock display on the home screen.
+
+---
+
+## Examples
+
+| Sketch | Description |
+|--------|-------------|
+| `examples/01_minimal/` | Simplest working sketch — one screen, two fields, home callback |
+| `examples/02_8screens/` | All 6 field types across 8 screens — best starting point for new projects |
+| `examples/03_alerts/` | Passive and active alert system demonstration |
+| `examples/04_rtc/` | DS3231 real-time clock — live time display and time/date set modal |
 
 ---
 
