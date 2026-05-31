@@ -502,7 +502,8 @@ private:
     void   (*_longCb[2])();  // long-press callbacks for enc[0] and enc[1]
     void   (*_bothCb)();     // both-pressed callback (overrides RTC)
     uint32_t  _bothMs;       // when both buttons were first detected pressed
-    bool      _bothArmed;    // both-pressed window is open
+    bool      _bothArmed;    // both are currently held
+    bool      _bothFired;    // threshold already fired this press — no double-fire
 
     // ---- ACTION confirmation ------------------------------------------------
     void                       (*_pendingAction)();
