@@ -1,4 +1,4 @@
-# APALCDGUI API Reference — v1.1.1
+# APALCDGUI API Reference — v1.1.2
 
 ## Quick-start examples
 
@@ -157,9 +157,24 @@ Returns `false` if `APA_LCD_MAX_SCREENS` is already reached.
 
 ### `setRTC()`
 ```cpp
-void setRTC(DS3231* rtc);   // only compiled when DS3231.h is included before APALCDGUI.h
+void setRTC(DS3231* rtc);   // only compiled when -DAPA_LCD_USE_DS3231 is set in build_flags
 ```
-Wires the both-buttons-pressed gesture to the built-in time/date edit modal.
+Wires the 800 ms both-buttons-hold gesture to the built-in two-step time/date edit modal.
+
+Requires the `APA_LCD_USE_DS3231` build flag (PlatformIO `build_flags = -DAPA_LCD_USE_DS3231`; Arduino IDE `#define APA_LCD_USE_DS3231` before `#include <APALCDGUI.h>`). The library then pulls in `Wire.h` and `DS3231.h` automatically.
+
+**RTC modal flow:**
+
+```
+Hold KB1 + KB2 for 800 ms  →  TIME screen  (HH : MM : SS)
+  Knob2 rotates cursor between fields; press = enter edit; rotate = change; press = confirm
+  SAVE  →  DATE screen  (DD / MM / YYYY)
+    SAVE  →  writes all values to DS3231, returns HOME
+    BACK  →  returns to TIME screen
+  BACK  →  discards all changes, returns HOME
+```
+
+> Do NOT call `setBothPressedCallback()` when using `setRTC()` — the user callback always takes priority and will suppress the RTC modal.
 
 ---
 
