@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.2] — 2026-05-31
+
+### Added
+
+- `examples/04_rtc/04_rtc.ino` — DS3231 RTC modal example with live clock on home screen
+- `examples/02_8screens/02_8screens.ino` — enhanced to demonstrate all 6 field types: `fieldBool` added to L-1 (CHOICE + CHOICE + BOOL), `fieldReadonly` and `fieldAction` already present in later screens
+
+### Fixed
+
+- DS3231 integration now uses explicit build flag `-DAPA_LCD_USE_DS3231` (PlatformIO `build_flags` / Arduino IDE `#define` before `#include`) — the previous include-order approach failed in PlatformIO because `APALCDGUI.cpp` is compiled in a separate translation unit and cannot see the sketch's includes
+- RTC modal gesture changed to 800 ms both-buttons hold (`APALCDGUI_LONG_PRESS_MS`) — the previous 200 ms threshold (`APALCDGUI_BOTH_PRESS_MS`) fired too easily during normal navigation; `_bothFired` flag prevents double-fire against individual long-press callbacks
+- RTC modal UX redesigned: TIME screen → SAVE → DATE screen → SAVE (write all, return HOME) sequential flow; BACK on DATE returns to TIME; BACK on TIME discards everything; removed Knob1 sub-screen toggle which was unreliable in practice
+- RTC cursor indicator: single ↑ below selected field only (slot 5); all other positions blank — previous design showed ↑ on every unselected field and ↓ on the selected one, which operators found confusing
+
+### Changed
+
+- Example folder restructured: flat `examples/01_minimal`, `02_8screens`, `03_alerts`, `04_rtc` — replaces the `examples/mega/` category subfolder which caused Arduino IDE and GitHub to hide the sketches behind an extra navigation level
+- All 4 examples updated with platform-neutral wiring notes (removed "Arduino Mega 2560" from sketch titles and wiring tables where not strictly necessary)
+
+---
+
 ## [1.1.1] — 2026-05-30
 
 ### Added
