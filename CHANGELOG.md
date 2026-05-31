@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.4] — 2026-05-31
+
+### Added
+
+- Multiple home screen pages: `addHomeScreen(fn)` — call multiple times to register up to `APA_LCD_MAX_HOME_SCREENS` (default 4) pages; KB2 rotation on HOME cycles between them
+- Automatic page indicator at row 3 cols 17–19: the library draws `n/N` after the home callback returns when more than one page is registered — no user code required
+- `setHomeCallback(fn)` unchanged as an alias for `addHomeScreen()` — existing single-page sketches compile and run without modification
+- `currentHomePage()` / `homePageCount()` query getters added
+- `APA_LCD_MAX_HOME_SCREENS` compile-time capacity define (default 4)
+- Author attribution added to `README.md` and `docs/API.md`
+- `APALCDGUI_VERSION` bumped to `"1.1.4"`
+
+---
+
 ## [1.1.3] — 2026-05-31
 
 ### Fixed
