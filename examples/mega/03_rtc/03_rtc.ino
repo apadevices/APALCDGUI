@@ -16,12 +16,21 @@
 //   Cursor on SAVE + press writes all fields to the DS3231 chip.
 //   Cursor on BACK + press discards changes and returns to HOME.
 //
-// ---- CRITICAL: include order ------------------------------------------------
+// ---- Enabling the RTC modal -------------------------------------------------
 //
-//   DS3231.h MUST be included BEFORE APALCDGUI.h.
-//   This is how the RTC modal is compiled in — the library checks for
-//   the DS3231.h include guard (__DS3231_h) at compile time.
-//   Reversing the order disables the modal silently.
+//   The DS3231 modal is compiled in by defining APA_LCD_USE_DS3231.
+//   In PlatformIO add it to build_flags in platformio.ini:
+//
+//     build_flags = -DAPA_LCD_USE_DS3231
+//
+//   In Arduino IDE add before the #include:
+//
+//     #define APA_LCD_USE_DS3231
+//     #include <APALCDGUI.h>
+//
+//   When the flag is set, APALCDGUI.h automatically includes Wire.h and
+//   DS3231.h — no manual includes needed in the sketch.
+//   You still need Wire.begin() in setup().
 //
 // ---- Wiring (Mega 2560) -----------------------------------------------------
 //   DS3231 SDA → Mega pin 20
@@ -40,9 +49,8 @@
 //                      press:  enter edit / confirm / switch RTC sub-screen
 //   Both buttons simultaneously → open RTC time/date modal
 
-// DS3231.h FIRST — this activates the RTC modal inside APALCDGUI
-#include <Wire.h>
-#include <DS3231.h>
+// APA_LCD_USE_DS3231 must be set in build_flags — see comment above.
+// APALCDGUI.h pulls in Wire.h and DS3231.h automatically when the flag is set.
 #include <APALCDGUI.h>
 
 APALCDGUI gui;
