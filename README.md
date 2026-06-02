@@ -1,9 +1,11 @@
 # APALCDGUI
 
+<p align="center">
 <img src="extras/apalcdgui.png" width="600" alt="APALCDGUI">
+</p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.2.3](https://img.shields.io/badge/version-1.2.3-blue)
+· ![v1.3.0](https://img.shields.io/badge/version-1.3.0-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -321,7 +323,7 @@ Define `APA_LCD_MAX_TIMERS` before including the library to increase slot count.
 #include <APALCDGUI.h>
 ```
 
-> **Note:** The current LCD renderer shows one timer per row (rows 0–2) with SAVE on row 3. More than 3 timers requires a scrollable render not yet implemented. Keep `APA_LCD_MAX_TIMERS` at 3 for this release.
+> The LCD shows 3 timer slots at a time (rows 0–2); SAVE is always on row 3. When more than 3 slots are configured, the list scrolls: ↑ and ↓ indicators appear at the right edge of rows 0–1. `APA_LCD_MAX_TIMERS` supports up to 6.
 
 ---
 
@@ -564,7 +566,16 @@ Compiled and size-checked with the `02_8screens` example using the default 4-scr
 
 ## License
 
-MIT — see LICENSE file.
+**Dual license — see LICENSE file for full terms.**
+
+| Use | License |
+|-----|---------|
+| Personal, private, educational, hobby | Free — no charge, no paperwork |
+| Commercial (products, services, OEM) | Separate written license required |
+
+Commercial use includes selling or distributing hardware with this software, providing paid water treatment or automation services, or integrating it into any revenue-generating product or system.
+
+To obtain a commercial license: [kecup@vazac.eu](mailto:kecup@vazac.eu)
 
 ---
 
