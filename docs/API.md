@@ -1,4 +1,4 @@
-# APALCDGUI API Reference — v1.1.5
+# APALCDGUI API Reference — v1.2.3
 
 ## Quick-start examples
 
@@ -48,11 +48,12 @@ gui.addHomeScreen(drawHome);  // or gui.setHomeCallback(drawHome) — identical
 | Step | Call | Notes |
 |------|------|-------|
 | 1 | `APALCDGUI gui;` | Global — constructs with LCD pin defaults |
-| 2 | `gui.begin()` | In `setup()` — init LCD, encoders, EEPROM |
+| 2 | `gui.begin()` | In `setup()` — init LCD, encoders, EEPROM; timer data auto-loaded |
 | 3 | `gui.addHomeScreen(fn)` | Optional — register home page(s); call multiple times for scrollable dashboard |
 | 3a | `gui.setHomeCallback(fn)` | Alias for `addHomeScreen()` — single-page sketches need no changes |
 | 4 | `gui.setMenuRow2Callback(fn)` | Optional — live data on menu row 2 |
 | 5 | `gui.addScreen(...)` | Register as many screens as needed |
+| 5a | `gui.addTimerScreen(side, onSave)` | **After** all `addScreen()` on the same side — always last |
 | 6 | `gui.setLongPressCallback(...)` | Optional — override KB2 long-press |
 | 7 | `gui.setBothPressedCallback(fn)` | Optional — both-buttons gesture |
 | 8 | `gui.setRTC(&rtc)` | Optional — DS3231 time/date modal |
@@ -200,6 +201,91 @@ Returns `false` if `APA_LCD_MAX_SCREENS` is already reached.
 
 **SAVE vs BACK:** SAVE commits all edits and calls `onSave()`. BACK discards any in-progress edit — `onSave` is NOT called.
 
+### `addTimerScreen()`
+```cpp
+bool addTimerScreen(ScreenSide side, void (*onSave)() = nullptr);
+```
+Registers an inline timer schedule screen with `APA_LCD_MAX_TIMERS` (default 3) on/off time slots.
+
+**Important:** call `addTimerScreen()` AFTER all `addScreen()` calls on the same side. The timer screen always appears last in that side's rotation sequence.
+
+| Parameter | Description |
+|-----------|-------------|
+| `side` | `SCREEN_RIGHT` or `SCREEN_LEFT` |
+| `onSave` | Optional callback fired after SAVE is pressed. `nullptr` = EEPROM-only. |
+
+Returns `false` if a timer screen is already registered.
+
+**Screen layout:**
+```
+      01234567890123456789
+Row 0:  T1: 08:00-09:30
+Row 1: ►T2: 13:00-15:00    ← cursor on this row
+Row 2:  T3: 00:00-00:00    ← 00:00-00:00 = disabled
+Row 3: Total: 3h30m  >SAVE
+```
+
+**Editing a timer** (KB2 press on a timer row enters inline edit):
+```
+Row 1: ►T2:[08:00]09:00    ← rotating KB2 changes start time
+Row 1: ►T2: 08:00[09:00]   ← KB2 press confirmed start; now editing end
+```
+Times change in 30-minute steps (00:00 → 23:30). KB2 press confirms; KB1 press cancels.
+
+**SAVE:** writes all slots to EEPROM, fires optional `onSave()`, returns HOME.
+**KB1 press:** returns HOME and discards all uncommitted edits.
+
+**Timer EEPROM address:** `APA_LCD_TIMER_EEPROM_ADDR` (default 502), 7 bytes (addr 502–508).  
+Timer data is loaded automatically on `begin()` — no user code required.
+
+**Beginner path (no callback needed):**
+```cpp
+void setup() {
+    gui.begin();
+    gui.addHomeScreen(drawHome);
+    gui.addScreen(SCREEN_RIGHT, ...);    // regular screens first
+    gui.addTimerScreen(SCREEN_RIGHT);   // timer screen last; onSave = nullptr is fine
+}
+```
+
+**Advanced path (callback for immediate response):**
+```cpp
+void onTimerSave() {
+    uint16_t startMin = gui.getTimerStart(0);  // minutes from midnight
+    uint16_t endMin   = gui.getTimerEnd(0);
+    // update pump control state immediately
+}
+gui.addTimerScreen(SCREEN_RIGHT, onTimerSave);
+```
+
+**Pump control loop:**
+```cpp
+uint16_t nowMin = (uint16_t)hour * 60 + minute;
+for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+    if (gui.isTimerEnabled(i) &&
+        nowMin >= gui.getTimerStart(i) &&
+        nowMin <  gui.getTimerEnd(i)) {
+        // run pump or light
+    }
+}
+```
+
+### `getTimerStart()` / `getTimerEnd()`
+```cpp
+uint16_t getTimerStart(uint8_t index) const;
+uint16_t getTimerEnd(uint8_t index)   const;
+```
+Returns the start or end time of timer slot `index` as **minutes from midnight** (0 = 00:00, 1410 = 23:30).
+Returns 0 if `index >= APA_LCD_MAX_TIMERS`.
+
+### `isTimerEnabled()`
+```cpp
+bool isTimerEnabled(uint8_t index) const;
+```
+Returns `true` if timer slot `index` has a non-zero start or end time.
+A slot where both start and end are 00:00 is considered disabled.
+Returns `false` if `index >= APA_LCD_MAX_TIMERS`.
+
 ### `setRTC()`
 ```cpp
 void setRTC(DS3231* rtc);   // only compiled when -DAPA_LCD_USE_DS3231 is set in build_flags
@@ -281,7 +367,7 @@ static FieldDef fieldAction(const __FlashStringHelper* label,
                             void (*action)() = nullptr,
                             bool confirm = false);
 ```
-Button field. Shows `"STRT"` when `action` is non-null, `"-no-"` when nullptr. `confirm=true` shows a full-screen "Confirm action?" prompt (KB1=NO, KB2=YES) before calling `action`. Use for irreversible operations.
+Button field. Shows `"STRT"` when `action` is non-null, `"-no-"` when nullptr. When the operator presses KB2 on an ACTION field, the cursor changes to `►` for 300 ms (click confirmation flash) then `action()` fires and the cursor jumps to SAVE. `confirm=true` shows a full-screen "Confirm action?" prompt (KB1=NO, KB2=YES) before calling `action` — use for irreversible operations.
 
 ### `fieldReadonly()`
 ```cpp
@@ -394,7 +480,7 @@ void showMessage(const char* line1, const char* line2 = nullptr, uint16_t ms = 1
 void clearMessage();
 ```
 
-Covers rows 1–2 with a timed message. Previous screen content restores automatically after `ms` milliseconds.
+Covers all four rows with a timed message: `line1` is written to row 0, `line2` to row 1, rows 2–3 are blanked. Previous screen content restores automatically after `ms` milliseconds.
 
 ---
 
@@ -412,7 +498,7 @@ Call when application data displayed on the current screen changes outside of a 
 
 ```cpp
 bool    isMenuActive()    const;  // true when not at HOME
-bool    isEditActive()    const;  // true during field or RTC edit
+bool    isEditActive()    const;  // true during field, RTC, or timer edit
 int8_t  currentScreen()   const;  // 0=HOME, +N=right screen N, -N=left screen N
 uint8_t currentHomePage()  const;  // 0-based index of the currently displayed home page
 uint8_t homePageCount()    const;  // number of home pages registered via addHomeScreen()
@@ -452,8 +538,12 @@ enum FieldType   : uint8_t { FIELD_INT, FIELD_FLOAT, FIELD_CHOICE,
 #define APA_LCD_MAX_SCREENS        4    // total submenu screens left+right (default 4)
 #define APA_LCD_MAX_HOME_SCREENS   4    // home screen pages scrolled by KB2 (default 4)
 #define APA_LCD_ACTIVE_ALERT_QUEUE 3    // simultaneous active alerts (default 3)
-#define APA_LCD_EEPROM_ADDR      500    // EEPROM base address (default 500, uses 2 bytes)
+#define APA_LCD_MAX_TIMERS         3    // timer slots on the timer screen (default 3, max 3)
+#define APA_LCD_EEPROM_ADDR      500    // brightness EEPROM base address (default 500, 2 bytes)
+#define APA_LCD_TIMER_EEPROM_ADDR 502   // timer schedule EEPROM address (default 502, 7 bytes)
 ```
+
+> **`APA_LCD_MAX_TIMERS`** — keep at 3 for this release. The 20×4 LCD has 4 rows; row 3 is always reserved for the SAVE row and total, leaving rows 0–2 for timer slots. A future version with scrolling support will lift this restriction.
 
 **PlatformIO** — add to `build_flags`:
 ```ini
@@ -468,7 +558,7 @@ build_flags = -DAPA_LCD_MAX_SCREENS=8
 
 ---
 
-## Timing constants (override in your sketch if needed)
+## Timing constants (defined in APALCDGUI.h — edit the library source to change)
 
 | Constant | Default | Description |
 |----------|---------|-------------|
@@ -483,14 +573,21 @@ build_flags = -DAPA_LCD_MAX_SCREENS=8
 
 ## EEPROM layout
 
-Two bytes at `APA_LCD_EEPROM_ADDR` (default 500):
+| Address | Bytes | Content |
+|---------|-------|---------|
+| 500 | 1 | Backlight brightness (0–255) |
+| 501 | 1 | Validity marker (0xAE) |
+| 502 | 1 | Timer 1 start slot (0–47; slot × 30 = minutes) |
+| 503 | 1 | Timer 1 end slot |
+| 504 | 1 | Timer 2 start slot |
+| 505 | 1 | Timer 2 end slot |
+| 506 | 1 | Timer 3 start slot |
+| 507 | 1 | Timer 3 end slot |
+| 508 | 1 | Timer validity marker (0xAF) |
 
-| Address | Content |
-|---------|---------|
-| 500 | Backlight brightness (0–255) |
-| 501 | Validity marker (0xAE) |
+Addresses 500–501 are always used. Addresses 502–508 are only written when `addTimerScreen()` is called.
 
-On ESP32 / ESP8266: `EEPROM.begin()` and `EEPROM.commit()` are called automatically.
+On ESP32 / ESP8266: `EEPROM.begin()` and `EEPROM.commit()` are called automatically by the library.
 
 ---
 
