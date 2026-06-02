@@ -14,7 +14,7 @@
 //
 // Controls:
 //   Right knob (knob1 / KB1) — rotate: navigate between screens
-//                               hold KB1 + rotate: adjust backlight brightness
+//                               hold KB1 for 800 ms then rotate: adjust backlight brightness
 //   Left  knob (knob2 / KB2) — rotate: move cursor / change a value during editing
 //                               press:      enter edit mode, or confirm a selection
 //                               long press: show passive alert detail text, then dismiss it
@@ -46,7 +46,7 @@
 #endif
 
 // ---- Version ----------------------------------------------------------------
-#define APALCDGUI_VERSION "1.1.6"
+#define APALCDGUI_VERSION "1.2.3"
 
 // ---- Capacity — define BEFORE #include to override --------------------------
 // These control compile-time array sizes; defining them after #include has no effect.
@@ -62,9 +62,17 @@
 #define APA_LCD_MAX_HOME_SCREENS 4     // max home screen pages scrolled by KB2
 #endif
 
+#ifndef APA_LCD_MAX_TIMERS
+#define APA_LCD_MAX_TIMERS 3           // timer slots on the timer screen (max 3 for 4-row LCD)
+#endif
+
 // ---- EEPROM base address — define before #include only if address 500 collides -----------
 #ifndef APA_LCD_EEPROM_ADDR
-#define APA_LCD_EEPROM_ADDR 500        // 2 bytes used: brightness(500) + validity marker(501)
+#define APA_LCD_EEPROM_ADDR 500        // 2 bytes: brightness(500) + validity marker(501)
+#endif
+
+#ifndef APA_LCD_TIMER_EEPROM_ADDR
+#define APA_LCD_TIMER_EEPROM_ADDR 502  // 7 bytes: [start,end]×MAX_TIMERS + 0xAF marker
 #endif
 
 // ---- Timing -----------------------------------------------------------------
@@ -322,7 +330,8 @@ public:
 
     // ---- Message overlay ----------------------------------------------------
 
-    /** Show a timed 2-line message that temporarily covers rows 1 and 2 of the screen.
+    /** Show a timed 2-line message that covers all four rows of the screen.
+     *  line1 is written to row 0, line2 to row 1; rows 2 and 3 are blanked.
      *  The previous screen content is restored automatically after ms milliseconds.
      *  line1: top message line, up to 20 characters.
      *  line2: bottom message line, or nullptr to leave it blank.
@@ -425,14 +434,42 @@ public:
      *  This value is saved to EEPROM and restored on power-on. */
     uint8_t getBrightness() const;
 
+    // ---- Timer schedule screen -----------------------------------------------
+
+    /** Register a timer schedule screen on the given side.
+     *  The screen shows APA_LCD_MAX_TIMERS (default 3) on/off time slots that
+     *  the operator edits inline — no extra screens needed.
+     *  IMPORTANT: call AFTER all addScreen() calls on the same side so that
+     *  the timer screen appears last in the rotation sequence.
+     *  onSave: optional callback fired each time the operator presses SAVE.
+     *  Times are stored in EEPROM (address APA_LCD_TIMER_EEPROM_ADDR) and
+     *  auto-loaded on begin() — the callback is not required for basic use.
+     *  Returns false if a timer screen is already registered. */
+    bool addTimerScreen(ScreenSide side, void (*onSave)() = nullptr);
+
+    /** Returns the start time of timer slot index as minutes from midnight (0–1410).
+     *  A slot set to 00:00-00:00 is disabled — use isTimerEnabled() to check first.
+     *  Returns 0 if index >= APA_LCD_MAX_TIMERS. */
+    uint16_t getTimerStart(uint8_t index) const;
+
+    /** Returns the end time of timer slot index as minutes from midnight (0–1410).
+     *  Returns 0 if index >= APA_LCD_MAX_TIMERS. */
+    uint16_t getTimerEnd(uint8_t index) const;
+
+    /** Returns true when timer slot index has a non-zero start or end time.
+     *  A slot where both start and end are 00:00 is considered disabled.
+     *  Returns false if index >= APA_LCD_MAX_TIMERS. */
+    bool isTimerEnabled(uint8_t index) const;
+
 private:
     // ---- Private enums ------------------------------------------------------
     enum UIState : uint8_t {
         ST_HOME, ST_NAV, ST_EDIT,
-        ST_FLASH_SAVE, ST_FLASH_BACK,
+        ST_FLASH_SAVE, ST_FLASH_BACK, ST_FLASH_ACTION,
         ST_BRIGHTNESS,
         ST_CONFIRM,
-        ST_RTC_NAV, ST_RTC_EDIT
+        ST_RTC_NAV, ST_RTC_EDIT,
+        ST_TIMER, ST_TIMER_EDIT
     };
     enum BlStage : uint8_t { BL_ACTIVE, BL_DIM, BL_OFF };
 
@@ -535,6 +572,20 @@ private:
     uint8_t  _rtcCur;        // cursor: 0-2 = field, 3 = BACK, 4 = SAVE
     int16_t  _rtcVal[2][3];  // editable copies: [TIME][H,M,S] / [DATE][D,M,Y]
 
+    // ---- Timer schedule screen (10 bytes + 1 working copy) ------------------
+    // Slots encode time in 30-min steps: slot*30 = minutes from midnight (0=00:00, 47=23:30)
+    uint8_t  _timerStart[APA_LCD_MAX_TIMERS]; // start slot per timer (0-47)
+    uint8_t  _timerEnd[APA_LCD_MAX_TIMERS];   // end   slot per timer (0-47)
+    void   (*_timerSaveCb)();                 // optional SAVE callback
+    int8_t   _timerScrPos;                    // 0=not registered, +n=right pos n, -n=left pos n
+    struct {
+        uint8_t cursor    : 3;  // row cursor: 0..MAX_TIMERS-1 = timers, MAX_TIMERS = SAVE
+        uint8_t editField : 1;  // 0=editing start, 1=editing end
+    } _timerBits;
+    uint8_t  _timerEditVal;                   // working copy of the slot being edited
+    uint8_t  _timerOrigStart;                 // saved start slot when entering edit — restored on KB1 cancel
+    uint8_t  _timerOrigEnd;                   // saved end   slot when entering edit — restored on KB1 cancel
+
     // ---- ISR singleton (one LCD + two encoders per board) -------------------
     static APALCDGUI* _inst;
     static void _isr0();
@@ -552,10 +603,13 @@ private:
     void _stateEdit();
     void _stateFlashSave();
     void _stateFlashBack();
+    void _stateFlashAction();
     void _stateBrightness();
     void _stateConfirm();
     void _stateRTCNav();
     void _stateRTCEdit();
+    void _stateTimer();
+    void _stateTimerEdit();
 
     void _checkBothPress();
     void _checkMenuTimeout();
@@ -568,6 +622,7 @@ private:
     void _renderAlertScreen();
     void _renderPassiveCorner();
     void _renderHome();
+    void _renderTimer();
 
     void _rowWrite(uint8_t row, const char* text);           // write COLS chars, space-pad
     void _padWrite(uint8_t col, uint8_t row,                 // write width chars, space-pad
@@ -576,6 +631,8 @@ private:
     void _blSet(uint8_t val);
     void _loadEEPROM();
     void _saveEEPROM();
+    void _loadTimerEEPROM();
+    void _saveTimerEEPROM();
 
     uint8_t       _countSide(ScreenSide side) const;
     const Screen* _curScreen() const;                        // nullptr when _scrPos == 0
