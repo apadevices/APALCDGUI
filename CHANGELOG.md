@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0] — 2026-06-02
+
+### Added
+
+- Scrollable timer list: `APA_LCD_MAX_TIMERS` now supports up to 6 slots (previously fixed at 3)
+- Viewport scrolling: LCD shows 3 slots at a time; rotating KB2 past the visible window scrolls the list automatically
+- Scroll indicators: ↑ at col 19 row 0 when slots exist above the viewport; ↓ at col 19 row 1 when slots exist below
+- `viewTop` packed into existing `_timerBits` byte (3 bits, zero SRAM cost)
+- Auto-advance after editing the last visible slot scrolls the viewport to keep the next slot in view
+
+### Changed
+
+- `APA_LCD_MAX_TIMERS` default remains 3; define it as up to 6 before `#include` to use more slots
+- EEPROM timer area scales automatically: `2 × APA_LCD_MAX_TIMERS + 1` bytes starting at `APA_LCD_TIMER_EEPROM_ADDR` (13 bytes for 6 slots vs 7 bytes for 3)
+- Entering the timer screen always resets the viewport to slot 1 (top of list)
+- License changed from MIT to dual license: free for personal/educational/hobby use; commercial use requires a separate written license (contact [kecup@vazac.eu](mailto:kecup@vazac.eu))
+- Logo added to README, centered; README version badge corrected
+
 ## [1.2.3] — 2026-06-02
 
 ### Changed
