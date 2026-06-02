@@ -1,4 +1,4 @@
-# APALCDGUI API Reference — v1.2.3
+# APALCDGUI API Reference — v1.3.0
 
 ## Quick-start examples
 
@@ -538,12 +538,12 @@ enum FieldType   : uint8_t { FIELD_INT, FIELD_FLOAT, FIELD_CHOICE,
 #define APA_LCD_MAX_SCREENS        4    // total submenu screens left+right (default 4)
 #define APA_LCD_MAX_HOME_SCREENS   4    // home screen pages scrolled by KB2 (default 4)
 #define APA_LCD_ACTIVE_ALERT_QUEUE 3    // simultaneous active alerts (default 3)
-#define APA_LCD_MAX_TIMERS         3    // timer slots on the timer screen (default 3, max 3)
+#define APA_LCD_MAX_TIMERS         3    // timer slots on the timer screen (default 3, up to 6)
 #define APA_LCD_EEPROM_ADDR      500    // brightness EEPROM base address (default 500, 2 bytes)
 #define APA_LCD_TIMER_EEPROM_ADDR 502   // timer schedule EEPROM address (default 502, 7 bytes)
 ```
 
-> **`APA_LCD_MAX_TIMERS`** — keep at 3 for this release. The 20×4 LCD has 4 rows; row 3 is always reserved for the SAVE row and total, leaving rows 0–2 for timer slots. A future version with scrolling support will lift this restriction.
+> **`APA_LCD_MAX_TIMERS`** — up to 6 slots supported. The LCD shows 3 slots at a time (rows 0–2); row 3 is always Total + SAVE. When more than 3 slots are configured the list scrolls, with ↑ / ↓ indicators at col 19 of rows 0–1. Values above 6 are not tested and not recommended.
 
 **PlatformIO** — add to `build_flags`:
 ```ini
