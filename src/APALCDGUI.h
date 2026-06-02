@@ -46,7 +46,7 @@
 #endif
 
 // ---- Version ----------------------------------------------------------------
-#define APALCDGUI_VERSION "1.2.3"
+#define APALCDGUI_VERSION "1.3.0"
 
 // ---- Capacity — define BEFORE #include to override --------------------------
 // These control compile-time array sizes; defining them after #include has no effect.
@@ -63,7 +63,7 @@
 #endif
 
 #ifndef APA_LCD_MAX_TIMERS
-#define APA_LCD_MAX_TIMERS 3           // timer slots on the timer screen (max 3 for 4-row LCD)
+#define APA_LCD_MAX_TIMERS 3           // timer slots (default 3; up to 6 supported with scroll)
 #endif
 
 // ---- EEPROM base address — define before #include only if address 500 collides -----------
@@ -572,7 +572,7 @@ private:
     uint8_t  _rtcCur;        // cursor: 0-2 = field, 3 = BACK, 4 = SAVE
     int16_t  _rtcVal[2][3];  // editable copies: [TIME][H,M,S] / [DATE][D,M,Y]
 
-    // ---- Timer schedule screen (10 bytes + 1 working copy) ------------------
+    // ---- Timer schedule screen (10 bytes + 2 working copies) ----------------
     // Slots encode time in 30-min steps: slot*30 = minutes from midnight (0=00:00, 47=23:30)
     uint8_t  _timerStart[APA_LCD_MAX_TIMERS]; // start slot per timer (0-47)
     uint8_t  _timerEnd[APA_LCD_MAX_TIMERS];   // end   slot per timer (0-47)
@@ -581,6 +581,7 @@ private:
     struct {
         uint8_t cursor    : 3;  // row cursor: 0..MAX_TIMERS-1 = timers, MAX_TIMERS = SAVE
         uint8_t editField : 1;  // 0=editing start, 1=editing end
+        uint8_t viewTop   : 3;  // first visible timer index (scroll window, 0 when ≤3 timers)
     } _timerBits;
     uint8_t  _timerEditVal;                   // working copy of the slot being edited
     uint8_t  _timerOrigStart;                 // saved start slot when entering edit — restored on KB1 cancel
