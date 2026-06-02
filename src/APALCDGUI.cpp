@@ -283,7 +283,7 @@ void APALCDGUI::begin(
     for (uint8_t i = 0; i < APA_LCD_ACTIVE_ALERT_QUEUE; i++) _alertQ[i].used = false;
     _timerScrPos = 0; _timerSaveCb = nullptr; _timerEditVal = 0;
     _timerOrigStart = 0; _timerOrigEnd = 0;
-    _timerBits.cursor = 0; _timerBits.editField = 0;
+    _timerBits.cursor = 0; _timerBits.editField = 0; _timerBits.viewTop = 0;
     _loadTimerEEPROM();
     _ready = true;
 }
@@ -777,17 +777,25 @@ void APALCDGUI::_renderHome() {
 
 // ---- Render: timer schedule screen ------------------------------------------
 // Row layout: [row 0..MAX_TIMERS-1] = timer rows, [row 3] = total + SAVE
-// Timer row: " T1: 08:00-09:00    " (not selected) or "►T1:[08:00]09:00   " (editing start)
+// Timer rows 0-2 show a 3-slot viewport into the full list; row 3 is always Total+SAVE.
+// Scroll indicators: ↑ at col 19 row 0 (slots above), ↓ at col 19 row 1 (slots below).
+// Row 2 cols 17-19 are owned by the passive alert indicator — no indicator placed there.
 void APALCDGUI::_renderTimer() {
-    // Total enabled hours (committed values only, not the in-progress edit)
+    // Total enabled hours (committed values, not in-progress edit)
     uint16_t totalMin = 0;
     for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
         if (_timerEnd[i] > _timerStart[i])
             totalMin += (uint16_t)(_timerEnd[i] - _timerStart[i]) * 30;
     }
 
-    uint8_t renderRows = (APA_LCD_MAX_TIMERS <= 3) ? APA_LCD_MAX_TIMERS : 3;
-    for (uint8_t i = 0; i < renderRows; i++) {
+    uint8_t top      = _timerBits.viewTop;
+    bool    hasAbove = (top > 0);
+    bool    hasBelow = (top + 3 < APA_LCD_MAX_TIMERS);
+
+    for (uint8_t row = 0; row < 3; row++) {
+        uint8_t i = top + row;
+        if (i >= APA_LCD_MAX_TIMERS) { _rowWrite(row, ""); continue; } // pad unused rows
+
         bool hasCursor = (_timerBits.cursor == i);
         bool editStart = (_state == ST_TIMER_EDIT && hasCursor && _timerBits.editField == 0);
         bool editEnd   = (_state == ST_TIMER_EDIT && hasCursor && _timerBits.editField == 1);
@@ -798,31 +806,32 @@ void APALCDGUI::_renderTimer() {
         uint8_t sh = startSlot >> 1, sm = (startSlot & 1) ? 30 : 0;
         uint8_t eh = endSlot   >> 1, em = (endSlot   & 1) ? 30 : 0;
 
-        // Build 20-char row; col 0 written separately as LCD custom char
-        char row[COLS + 1];
-        memset(row, ' ', COLS);
-        row[COLS] = '\0';
-        row[1] = 'T';
-        row[2] = (char)('0' + i + 1);
-        row[3] = ':';
-        row[4] = editStart ? '[' : ' ';
-        row[5] = (char)('0' + sh / 10); row[6] = (char)('0' + sh % 10);
-        row[7] = ':';
-        row[8] = (char)('0' + sm / 10); row[9] = (char)('0' + sm % 10);
-        row[10] = editStart ? ']' : (editEnd ? '[' : '-');
-        row[11] = (char)('0' + eh / 10); row[12] = (char)('0' + eh % 10);
-        row[13] = ':';
-        row[14] = (char)('0' + em / 10); row[15] = (char)('0' + em % 10);
-        if (editEnd) row[16] = ']';
+        char r[COLS + 1];
+        memset(r, ' ', COLS); r[COLS] = '\0';
+        r[1] = 'T';
+        r[2] = (i < 9) ? (char)('1' + i) : '+'; // T1..T9 (never reaches + with max 6)
+        r[3] = ':';
+        r[4]  = editStart ? '[' : ' ';
+        r[5]  = (char)('0' + sh / 10); r[6]  = (char)('0' + sh % 10);
+        r[7]  = ':';
+        r[8]  = (char)('0' + sm / 10); r[9]  = (char)('0' + sm % 10);
+        r[10] = editStart ? ']' : (editEnd ? '[' : '-');
+        r[11] = (char)('0' + eh / 10); r[12] = (char)('0' + eh % 10);
+        r[13] = ':';
+        r[14] = (char)('0' + em / 10); r[15] = (char)('0' + em % 10);
+        if (editEnd) r[16] = ']';
 
-        // Match _renderField: > when navigating, ► only when actively editing this row
+        // Scroll indicators at col 19 (rows 0 and 1 only — row 2 col 17-19 = alert indicator)
+        if (row == 0 && hasAbove) r[19] = (char)5; // slot 5 = ↑
+        if (row == 1 && hasBelow) r[19] = (char)6; // slot 6 = ↓
+
         bool inEdit = (editStart || editEnd);
-        _lcd.setCursor(0, i);
+        _lcd.setCursor(0, row);
         _lcd.write(hasCursor ? (inEdit ? (uint8_t)CC_CURSOR_EDIT : '>') : ' ');
-        for (uint8_t c = 1; c < COLS; c++) _lcd.write((uint8_t)row[c]);
+        for (uint8_t c = 1; c < COLS; c++) _lcd.write((uint8_t)r[c]);
     }
 
-    // Row 3: total duration + SAVE indicator (no snprintf — avoids format-truncation warning)
+    // Row 3: total duration + SAVE indicator
     uint8_t th = (uint8_t)(totalMin / 60), tm = (uint8_t)(totalMin % 60);
     char r3[COLS + 1];
     memset(r3, ' ', COLS); r3[COLS] = '\0';
@@ -875,7 +884,7 @@ void APALCDGUI::_stateHome() {
             _scrPos = newPos;
             _curPos = 0;
             if (_timerScrPos != 0 && newPos == _timerScrPos) {
-                _timerBits.cursor = 0;
+                _timerBits.cursor = 0; _timerBits.viewTop = 0;
                 _setState(ST_TIMER);
             } else {
                 _setState(ST_NAV);
@@ -932,7 +941,7 @@ void APALCDGUI::_stateNav() {
             _scrPos = newPos;
             _curPos = 0;
             if (_timerScrPos != 0 && newPos == _timerScrPos) {
-                _timerBits.cursor = 0;
+                _timerBits.cursor = 0; _timerBits.viewTop = 0;
                 _setState(ST_TIMER);
                 return;
             }
@@ -1241,6 +1250,13 @@ void APALCDGUI::_stateTimer() {
         if (next < 0)                  next = (int8_t)APA_LCD_MAX_TIMERS;
         if (next > (int8_t)APA_LCD_MAX_TIMERS) next = 0;
         _timerBits.cursor = (uint8_t)next;
+        // Keep viewport in sync: scroll up or down when cursor exits the 3-row window
+        if (next < (int8_t)APA_LCD_MAX_TIMERS) {
+            if ((uint8_t)next < _timerBits.viewTop)
+                _timerBits.viewTop = (uint8_t)next;
+            else if ((uint8_t)next >= _timerBits.viewTop + 3)
+                _timerBits.viewTop = (uint8_t)next - 2;
+        }
         _dirty = true;
     }
 
@@ -1302,6 +1318,9 @@ void APALCDGUI::_stateTimerEdit() {
             uint8_t nextCursor = cur + 1;
             if (nextCursor > APA_LCD_MAX_TIMERS) nextCursor = 0;
             _timerBits.cursor = nextCursor;
+            // Scroll viewport down if cursor advanced beyond visible window
+            if (nextCursor < APA_LCD_MAX_TIMERS && nextCursor >= _timerBits.viewTop + 3)
+                _timerBits.viewTop = nextCursor - 2;
             _setState(ST_TIMER);
         }
     }
