@@ -91,6 +91,42 @@ void APALCDGUI::_saveEEPROM() {
 #endif
 }
 
+// ---- Timer EEPROM -----------------------------------------------------------
+// Layout: [start0][end0][start1][end1]...[startN][endN][0xAF marker]
+void APALCDGUI::_loadTimerEEPROM() {
+#if defined(ESP32) || defined(ESP8266)
+    EEPROM.begin(APA_LCD_TIMER_EEPROM_ADDR + APA_LCD_MAX_TIMERS * 2 + 2);
+#endif
+    if (EEPROM.read(APA_LCD_TIMER_EEPROM_ADDR + APA_LCD_MAX_TIMERS * 2) == 0xAF) {
+        for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+            uint8_t s = EEPROM.read(APA_LCD_TIMER_EEPROM_ADDR + i * 2);
+            uint8_t e = EEPROM.read(APA_LCD_TIMER_EEPROM_ADDR + i * 2 + 1);
+            _timerStart[i] = (s <= 47) ? s : 0;
+            _timerEnd[i]   = (e <= 47) ? e : 0;
+        }
+    } else {
+        for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) { _timerStart[i] = 0; _timerEnd[i] = 0; }
+    }
+}
+
+void APALCDGUI::_saveTimerEEPROM() {
+#if defined(ESP32) || defined(ESP8266)
+    EEPROM.begin(APA_LCD_TIMER_EEPROM_ADDR + APA_LCD_MAX_TIMERS * 2 + 2);
+    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+        EEPROM.write(APA_LCD_TIMER_EEPROM_ADDR + i * 2,     _timerStart[i]);
+        EEPROM.write(APA_LCD_TIMER_EEPROM_ADDR + i * 2 + 1, _timerEnd[i]);
+    }
+    EEPROM.write(APA_LCD_TIMER_EEPROM_ADDR + APA_LCD_MAX_TIMERS * 2, 0xAF);
+    EEPROM.commit();
+#else
+    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+        EEPROM.update(APA_LCD_TIMER_EEPROM_ADDR + i * 2,     _timerStart[i]);
+        EEPROM.update(APA_LCD_TIMER_EEPROM_ADDR + i * 2 + 1, _timerEnd[i]);
+    }
+    EEPROM.update(APA_LCD_TIMER_EEPROM_ADDR + APA_LCD_MAX_TIMERS * 2, 0xAF);
+#endif
+}
+
 // ---- Backlight helpers ------------------------------------------------------
 void APALCDGUI::_blSet(uint8_t val) { analogWrite(_blPin, val); }
 
@@ -137,6 +173,8 @@ void APALCDGUI::_setState(UIState s) {
 uint8_t APALCDGUI::_countSide(ScreenSide side) const {
     uint8_t n = 0;
     for (uint8_t i = 0; i < _nScreens; i++) if (_screens[i].side == side) n++;
+    if (_timerScrPos > 0 && side == SCREEN_RIGHT) n++;
+    if (_timerScrPos < 0 && side == SCREEN_LEFT)  n++;
     return n;
 }
 
@@ -243,6 +281,10 @@ void APALCDGUI::begin(
     _pendingAction = nullptr; _pendingLabel = nullptr;
     _rtcPtr = nullptr; _rtcSub = 0; _rtcCur = 0;
     for (uint8_t i = 0; i < APA_LCD_ACTIVE_ALERT_QUEUE; i++) _alertQ[i].used = false;
+    _timerScrPos = 0; _timerSaveCb = nullptr; _timerEditVal = 0;
+    _timerOrigStart = 0; _timerOrigEnd = 0;
+    _timerBits.cursor = 0; _timerBits.editField = 0;
+    _loadTimerEEPROM();
     _ready = true;
 }
 
@@ -254,6 +296,27 @@ bool APALCDGUI::addHomeScreen(void (*fn)(LiquidCrystal& lcd)) {
 }
 void APALCDGUI::setHomeCallback(void (*fn)(LiquidCrystal& lcd)) { addHomeScreen(fn); }
 void APALCDGUI::setMenuRow2Callback(void (*fn)()) { _row2Cb = fn; }
+
+bool APALCDGUI::addTimerScreen(ScreenSide side, void (*onSave)()) {
+    if (_timerScrPos != 0) return false;
+    uint8_t pos = _countSide(side) + 1;   // position after all existing screens on that side
+    _timerScrPos = (side == SCREEN_RIGHT) ? (int8_t)pos : -(int8_t)pos;
+    _timerSaveCb = onSave;
+    return true;
+}
+
+uint16_t APALCDGUI::getTimerStart(uint8_t index) const {
+    if (index >= APA_LCD_MAX_TIMERS) return 0;
+    return (uint16_t)_timerStart[index] * 30;
+}
+uint16_t APALCDGUI::getTimerEnd(uint8_t index) const {
+    if (index >= APA_LCD_MAX_TIMERS) return 0;
+    return (uint16_t)_timerEnd[index] * 30;
+}
+bool APALCDGUI::isTimerEnabled(uint8_t index) const {
+    if (index >= APA_LCD_MAX_TIMERS) return false;
+    return (_timerStart[index] != 0 || _timerEnd[index] != 0);
+}
 
 bool APALCDGUI::addScreen(ScreenSide side, const FieldDef& f1, void (*onSave)(),
                            const __FlashStringHelper* title) {
@@ -331,7 +394,7 @@ void APALCDGUI::markDirty() { _dirty = true; }
 
 // ---- State queries ---------------------------------------------------------
 bool    APALCDGUI::isMenuActive()    const { return _state != ST_HOME; }
-bool    APALCDGUI::isEditActive()    const { return _state == ST_EDIT || _state == ST_RTC_EDIT; }
+bool    APALCDGUI::isEditActive()    const { return _state == ST_EDIT || _state == ST_RTC_EDIT || _state == ST_TIMER_EDIT; }
 int8_t  APALCDGUI::currentScreen()   const { return _scrPos; }
 uint8_t APALCDGUI::getBrightness()   const { return _bright; }
 uint8_t APALCDGUI::currentHomePage() const { return _homeIdx; }
@@ -519,6 +582,11 @@ void APALCDGUI::_checkLongPress() {
                     // built-in: show passive alert text as message overlay, then clear
                     showMessage(_passL1, _passL2[0] ? _passL2 : nullptr, 3000);
                     clearAlert();
+                } else if (i == 0 && _state != ST_BRIGHTNESS) {
+                    // built-in KB1 long-press: enter brightness adjust immediately
+                    _state   = ST_BRIGHTNESS;
+                    _stateMs = millis();
+                    _dirty   = true;
                 }
             }
         }
@@ -569,7 +637,7 @@ void APALCDGUI::_renderPassiveCorner() {
 
 // ---- Render: field row (row 0, 1, or 2) ------------------------------------
 void APALCDGUI::_renderField(uint8_t row, const FieldDef& f, bool cursor, bool editing) {
-    // Col 0: cursor char
+    // Col 0: cursor char — > = pointer, ► = editing/confirmed
     _lcd.setCursor(0, row);
     if (cursor) _lcd.write(editing ? CC_CURSOR_EDIT : '>');
     else        _lcd.write(' ');
@@ -631,7 +699,7 @@ void APALCDGUI::_renderActionBar() {
     _lcd.setCursor(0, 3);
     _lcd.write(_curPos == backPos ? '>' : ' ');
     _lcd.print(F("*BACK  "));
-    if (_scrPos != 0) {
+    {
         char    side   = (_scrPos > 0) ? 'R' : 'L';
         uint8_t absPos = (_scrPos > 0) ? (uint8_t)_scrPos : (uint8_t)(-_scrPos);
         uint8_t total  = _countSide(_scrPos > 0 ? SCREEN_RIGHT : SCREEN_LEFT);
@@ -642,8 +710,6 @@ void APALCDGUI::_renderActionBar() {
         if      (first && !last) _lcd.write((uint8_t)6); // ↓
         else if (last)           _lcd.write((uint8_t)5); // ↑
         else                     _lcd.write((uint8_t)3); // ↕
-    } else {
-        _lcd.print(F("   "));
     }
     _lcd.print(F("   "));
     _lcd.write(_curPos == savePos ? '>' : ' ');
@@ -694,6 +760,7 @@ void APALCDGUI::_renderHome() {
         return;
     }
     if (_nHomeCbs > 0) {
+        _rowWrite(3, "");  // clear row 3 before callback — prevents stale timer/menu/brightness content
         _homeCbs[_homeIdx](_lcd);
     } else {
         for (uint8_t r = 0; r < ROWS; r++) _rowWrite(r, "");
@@ -701,10 +768,72 @@ void APALCDGUI::_renderHome() {
     // Page indicator at row 3 cols 17–19 — drawn after callback so it always wins.
     // Only shown when more than one home page is registered (single-page: no indicator).
     if (_nHomeCbs > 1) {
-        char pgbuf[4];
+        char pgbuf[8]; // "255/255" + NUL — covers full uint8_t range, silences format-truncation
         snprintf(pgbuf, sizeof(pgbuf), "%d/%d", _homeIdx + 1, _nHomeCbs);
         _padWrite(17, 3, pgbuf, 3);
     }
+    _renderPassiveCorner();
+}
+
+// ---- Render: timer schedule screen ------------------------------------------
+// Row layout: [row 0..MAX_TIMERS-1] = timer rows, [row 3] = total + SAVE
+// Timer row: " T1: 08:00-09:00    " (not selected) or "►T1:[08:00]09:00   " (editing start)
+void APALCDGUI::_renderTimer() {
+    // Total enabled hours (committed values only, not the in-progress edit)
+    uint16_t totalMin = 0;
+    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+        if (_timerEnd[i] > _timerStart[i])
+            totalMin += (uint16_t)(_timerEnd[i] - _timerStart[i]) * 30;
+    }
+
+    uint8_t renderRows = (APA_LCD_MAX_TIMERS <= 3) ? APA_LCD_MAX_TIMERS : 3;
+    for (uint8_t i = 0; i < renderRows; i++) {
+        bool hasCursor = (_timerBits.cursor == i);
+        bool editStart = (_state == ST_TIMER_EDIT && hasCursor && _timerBits.editField == 0);
+        bool editEnd   = (_state == ST_TIMER_EDIT && hasCursor && _timerBits.editField == 1);
+
+        uint8_t startSlot = editStart ? _timerEditVal : _timerStart[i];
+        uint8_t endSlot   = editEnd   ? _timerEditVal : _timerEnd[i];
+
+        uint8_t sh = startSlot >> 1, sm = (startSlot & 1) ? 30 : 0;
+        uint8_t eh = endSlot   >> 1, em = (endSlot   & 1) ? 30 : 0;
+
+        // Build 20-char row; col 0 written separately as LCD custom char
+        char row[COLS + 1];
+        memset(row, ' ', COLS);
+        row[COLS] = '\0';
+        row[1] = 'T';
+        row[2] = (char)('0' + i + 1);
+        row[3] = ':';
+        row[4] = editStart ? '[' : ' ';
+        row[5] = (char)('0' + sh / 10); row[6] = (char)('0' + sh % 10);
+        row[7] = ':';
+        row[8] = (char)('0' + sm / 10); row[9] = (char)('0' + sm % 10);
+        row[10] = editStart ? ']' : (editEnd ? '[' : '-');
+        row[11] = (char)('0' + eh / 10); row[12] = (char)('0' + eh % 10);
+        row[13] = ':';
+        row[14] = (char)('0' + em / 10); row[15] = (char)('0' + em % 10);
+        if (editEnd) row[16] = ']';
+
+        // Match _renderField: > when navigating, ► only when actively editing this row
+        bool inEdit = (editStart || editEnd);
+        _lcd.setCursor(0, i);
+        _lcd.write(hasCursor ? (inEdit ? (uint8_t)CC_CURSOR_EDIT : '>') : ' ');
+        for (uint8_t c = 1; c < COLS; c++) _lcd.write((uint8_t)row[c]);
+    }
+
+    // Row 3: total duration + SAVE indicator (no snprintf — avoids format-truncation warning)
+    uint8_t th = (uint8_t)(totalMin / 60), tm = (uint8_t)(totalMin % 60);
+    char r3[COLS + 1];
+    memset(r3, ' ', COLS); r3[COLS] = '\0';
+    r3[0]='T'; r3[1]='o'; r3[2]='t'; r3[3]='a'; r3[4]='l'; r3[5]=':';
+    r3[6] = (th > 9) ? (char)('0' + th / 10) : ' ';
+    r3[7] = (char)('0' + th % 10);
+    r3[8] = 'h';
+    r3[9] = (char)('0' + tm / 10); r3[10] = (char)('0' + tm % 10); r3[11] = 'm';
+    r3[14] = (_timerBits.cursor == APA_LCD_MAX_TIMERS) ? '>' : ' ';
+    r3[15]='S'; r3[16]='A'; r3[17]='V'; r3[18]='E';
+    _rowWrite(3, r3);
     _renderPassiveCorner();
 }
 
@@ -745,21 +874,28 @@ void APALCDGUI::_stateHome() {
         if (newPos != 0 && newPos != _scrPos) {
             _scrPos = newPos;
             _curPos = 0;
-            _setState(ST_NAV);
+            if (_timerScrPos != 0 && newPos == _timerScrPos) {
+                _timerBits.cursor = 0;
+                _setState(ST_TIMER);
+            } else {
+                _setState(ST_NAV);
+            }
             return;
         }
         _dirty = true;
     }
 
-    // KB2 rotation: cycle home screen pages (only when no active alert covers the display)
+    // KB2 rotation: wake backlight on any rotation; cycle pages only when multiple registered
     int32_t k2 = _encClicks(1);
-    if (k2 != 0 && _nHomeCbs > 1 && !hasActiveAlert()) {
+    if (k2 != 0) {
         _touchInput();
-        int8_t next = (int8_t)_homeIdx + (k2 > 0 ? 1 : -1);
-        if (next < 0)                   next = (int8_t)_nHomeCbs - 1;
-        if ((uint8_t)next >= _nHomeCbs) next = 0;
-        _homeIdx = (uint8_t)next;
-        _dirty = true;
+        if (_nHomeCbs > 1 && !hasActiveAlert()) {
+            int8_t next = (int8_t)_homeIdx + (k2 > 0 ? 1 : -1);
+            if (next < 0)                   next = (int8_t)_nHomeCbs - 1;
+            if ((uint8_t)next >= _nHomeCbs) next = 0;
+            _homeIdx = (uint8_t)next;
+            _dirty = true;
+        }
     }
 
     // KB2 press on active alert: ACK current slot, fire callback, advance to next
@@ -792,7 +928,15 @@ void APALCDGUI::_stateNav() {
         if (newPos == 0) { _setState(ST_HOME); _scrPos = 0; return; }
         bool ok = (newPos > 0) ? ((uint8_t)newPos  <= _countSide(SCREEN_RIGHT))
                                : ((uint8_t)(-newPos) <= _countSide(SCREEN_LEFT));
-        if (ok) { _scrPos = newPos; _curPos = 0; }
+        if (ok) {
+            _scrPos = newPos;
+            _curPos = 0;
+            if (_timerScrPos != 0 && newPos == _timerScrPos) {
+                _timerBits.cursor = 0;
+                _setState(ST_TIMER);
+                return;
+            }
+        }
         _dirty = true;
         return;
     }
@@ -822,7 +966,9 @@ void APALCDGUI::_stateNav() {
                         _pendingLabel  = f.label;
                         _setState(ST_CONFIRM);
                     } else {
-                        f.action();
+                        _pendingAction = f.action;
+                        _editIdx       = _curPos; // row to flash ► on
+                        _setState(ST_FLASH_ACTION);
                     }
                 }
                 return;
@@ -922,6 +1068,22 @@ void APALCDGUI::_stateFlashBack() {
     }
 }
 
+// ---- State: FLASH_ACTION ---------------------------------------------------
+void APALCDGUI::_stateFlashAction() {
+    if (_dirty) {
+        _lcd.setCursor(0, _editIdx);
+        _lcd.write(CC_CURSOR_EDIT); // ► on the action field row — click confirmed
+        _dirty = false;
+    }
+    if (millis() - _stateMs >= APALCDGUI_FLASH_BACK_MS) {
+        void (*fn)() = _pendingAction;
+        const Screen* s = _curScreen();
+        _curPos = s ? s->fieldCount + 1 : 2; // jump cursor to SAVE
+        _setState(ST_NAV);
+        if (fn) fn();
+    }
+}
+
 // ---- State: BRIGHTNESS_ADJUST ----------------------------------------------
 void APALCDGUI::_stateBrightness() {
     char buf[COLS + 1];
@@ -930,11 +1092,12 @@ void APALCDGUI::_stateBrightness() {
         _rowWrite(1, "  Brightness adj    ");
         snprintf(buf, sizeof(buf), "  Brightness: %3d  ", _bright);
         _rowWrite(2, buf);
-        _rowWrite(3, "KB1+K1:brightness   ");
+        _rowWrite(3, "Rotate K1, rel. KB1 ");
         _dirty = false;
     }
     int32_t k1 = _encClicks(0);
     if (k1 != 0) {
+        _touchInput();
         int16_t b = (int16_t)_bright + (int16_t)k1 * APALCDGUI_BRIGHTNESS_STEP;
         if (b < 0) b = 0;
         if (b > 255) b = 255;
@@ -1067,6 +1230,93 @@ void APALCDGUI::_stateRTCEdit() {
 #endif
 }
 
+// ---- State: TIMER -----------------------------------------------------------
+void APALCDGUI::_stateTimer() {
+    if (_dirty) { _renderTimer(); _dirty = false; }
+
+    int32_t k2 = _encClicks(1);
+    if (k2 != 0) {
+        _touchInput();
+        int8_t next = (int8_t)_timerBits.cursor + (k2 > 0 ? 1 : -1);
+        if (next < 0)                  next = (int8_t)APA_LCD_MAX_TIMERS;
+        if (next > (int8_t)APA_LCD_MAX_TIMERS) next = 0;
+        _timerBits.cursor = (uint8_t)next;
+        _dirty = true;
+    }
+
+    if (_enc[1].pressed) {
+        _touchInput();
+        if (_timerBits.cursor < APA_LCD_MAX_TIMERS) {
+            // Enter edit mode for this timer; start field first
+            uint8_t cur = _timerBits.cursor;
+            _timerOrigStart      = _timerStart[cur]; // save for KB1 cancel restore
+            _timerOrigEnd        = _timerEnd[cur];
+            _timerEditVal        = _timerStart[cur];
+            _timerBits.editField = 0;
+            _setState(ST_TIMER_EDIT);
+        } else {
+            // SAVE: write to EEPROM, fire callback, return HOME
+            _saveTimerEEPROM();
+            if (_timerSaveCb) _timerSaveCb();
+            _scrPos = 0;
+            _setState(ST_HOME);
+            showMessage(F("Timers saved!"), nullptr, 1000);
+        }
+    }
+
+    if (_enc[0].pressed) {  // KB1: return HOME, discard all uncommitted edits
+        _touchInput();
+        _scrPos = 0;
+        _setState(ST_HOME);
+    }
+
+    if (_passActive) _renderPassiveCorner();
+}
+
+// ---- State: TIMER_EDIT ------------------------------------------------------
+void APALCDGUI::_stateTimerEdit() {
+    if (_dirty) { _renderTimer(); _dirty = false; }
+
+    int32_t k2 = _encClicks(1);
+    if (k2 != 0) {
+        _touchInput();
+        int32_t v = (int32_t)_timerEditVal + k2;
+        if (v < 0)  v = 47;
+        if (v > 47) v = 0;
+        _timerEditVal = (uint8_t)v;
+        _dirty = true;
+    }
+
+    if (_enc[1].pressed) {
+        _touchInput();
+        uint8_t cur = _timerBits.cursor;
+        if (_timerBits.editField == 0) {
+            // Commit start → switch to end field
+            _timerStart[cur]  = _timerEditVal;
+            _timerEditVal     = _timerEnd[cur];
+            _timerBits.editField = 1;
+            _dirty = true;
+        } else {
+            // Commit end → return to ST_TIMER with cursor advanced
+            _timerEnd[cur] = _timerEditVal;
+            uint8_t nextCursor = cur + 1;
+            if (nextCursor > APA_LCD_MAX_TIMERS) nextCursor = 0;
+            _timerBits.cursor = nextCursor;
+            _setState(ST_TIMER);
+        }
+    }
+
+    if (_enc[0].pressed) {  // KB1: cancel edit — restore both fields to their pre-edit values
+        _touchInput();
+        uint8_t cur = _timerBits.cursor;
+        _timerStart[cur] = _timerOrigStart;
+        _timerEnd[cur]   = _timerOrigEnd;
+        _setState(ST_TIMER);
+    }
+
+    if (_passActive) _renderPassiveCorner();
+}
+
 // ---- update() ---------------------------------------------------------------
 void APALCDGUI::update() {
     if (!_ready) return;
@@ -1092,28 +1342,18 @@ void APALCDGUI::update() {
         }
     }
 
-    // Knob1 rotation while KB1 held → brightness adjust.
-    // Do NOT use _setState() here — it would flush enc[0].pos and lose the click.
-    {
-        int32_t k1raw; noInterrupts(); k1raw = _enc[0].pos; interrupts();
-        if (k1raw != 0 && _enc[0].btnHeld) {
-            if (_state != ST_BRIGHTNESS) {
-                _state   = ST_BRIGHTNESS;
-                _stateMs = millis();
-                _dirty   = true;
-            }
-        }
-    }
-
     switch (_state) {
         case ST_HOME:        _stateHome();        break;
         case ST_NAV:         _stateNav();         break;
         case ST_EDIT:        _stateEdit();        break;
-        case ST_FLASH_SAVE:  _stateFlashSave();   break;
-        case ST_FLASH_BACK:  _stateFlashBack();   break;
+        case ST_FLASH_SAVE:   _stateFlashSave();    break;
+        case ST_FLASH_BACK:   _stateFlashBack();    break;
+        case ST_FLASH_ACTION: _stateFlashAction();  break;
         case ST_BRIGHTNESS:  _stateBrightness();  break;
         case ST_CONFIRM:     _stateConfirm();     break;
         case ST_RTC_NAV:     _stateRTCNav();      break;
         case ST_RTC_EDIT:    _stateRTCEdit();     break;
+        case ST_TIMER:       _stateTimer();       break;
+        case ST_TIMER_EDIT:  _stateTimerEdit();   break;
     }
 }
