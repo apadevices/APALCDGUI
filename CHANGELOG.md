@@ -1,5 +1,69 @@
 # Changelog
 
+## [1.2.3] — 2026-06-02
+
+### Changed
+
+- Added logo image to README (`extras/apalcdgui.png`, 600 px wide)
+- Fixed README version badge URL — was showing 1.2.0 instead of the current version
+
+## [1.2.2] — 2026-06-01
+
+### Added
+
+- `ST_FLASH_ACTION` state: pressing KB2 on an ACTION field now flashes `►` on that row for 300 ms before firing the callback, giving the same click-confirmation feedback as SAVE and BACK
+- Cursor convention now consistent across all interactive elements: `>` = pointer (where cursor is), `►` = click confirmed (action in progress)
+
+### Fixed
+
+- Brightness gesture now requires KB1 to be held for 800 ms before rotation activates brightness adjust; previously any rotation while KB1 was held immediately entered brightness mode, causing accidental triggers during normal navigation
+- ACTION field cursor advances to SAVE after the flash, matching the commit behaviour of editable fields
+- `mega/02_alerts` example: home screen incorrectly said "KB1 long" for the gesture that clears passive alerts — corrected to "KB2 long"
+- `mega/02_alerts` example: active alert trigger functions now show a `showMessage` overlay ("Alert N queued / Go HOME to ACK") so the operator has immediate feedback that the alert was posted
+- `mega/01_8screens` example: `platformio.ini` was missing `build_flags = -DAPA_LCD_MAX_SCREENS=8`; left screens were silently dropped and CCW rotation did nothing
+
+## [1.2.1] — 2026-06-01
+
+### Fixed
+
+- Backlight brightness mode now activates immediately at the 800 ms KB1 long-press threshold, showing the brightness screen before any rotation is detected (previously the screen only appeared after the first encoder click)
+- Timer screen cursor now shows `>` in navigation mode and `►` only during active field editing, consistent with regular menu screens
+- Row 3 content from the timer screen ("Total … SAVE") and brightness screen no longer lingers on the home screen after returning; `_renderHome` clears row 3 before calling the user callback
+- KB1 cancel in timer edit now correctly restores both the start and end slot to their pre-edit values when pressing KB1 after the start time was already committed
+- `_stateBrightness` now calls `_touchInput()` on rotation so the menu timeout is properly reset during brightness adjustment
+- Dead else-branch removed from `_renderActionBar` (`_scrPos == 0` is unreachable in that context)
+- `pgbuf[4]` in `_renderHome` widened to `pgbuf[8]` to cover the full `uint8_t` range when `APA_LCD_MAX_HOME_SCREENS` > 9
+- `showMessage()` documentation corrected: covers rows 0 and 1 (not rows 1 and 2), and blanks all four rows
+
+## [1.2.0] — 2026-06-01
+
+### Added
+
+- Timer schedule screen: `addTimerScreen(side, onSave)` registers an inline on/off schedule screen with up to `APA_LCD_MAX_TIMERS` (default 3) time slots
+- Each timer slot stores a start and end time in 30-minute steps (00:00–23:30); both at 00:00 means disabled
+- `getTimerStart(i)` / `getTimerEnd(i)` return minutes from midnight (0–1410) for pump/light control logic
+- `isTimerEnabled(i)` returns true when a slot has a non-zero start or end time
+- Timer data auto-loaded from EEPROM on `begin()` and auto-saved to EEPROM when operator presses SAVE — no callback required for basic use
+- Optional `onSave` callback fires after each SAVE press for immediate application-side response
+- `APA_LCD_MAX_TIMERS` define (default 3) controls slot count — override before `#include`
+- `APA_LCD_TIMER_EEPROM_ADDR` define (default 502) sets the 7-byte EEPROM block address
+- Two new states: `ST_TIMER` (cursor navigation) and `ST_TIMER_EDIT` (inline field editing)
+- `isEditActive()` now returns true in `ST_TIMER_EDIT`
+- New example `examples/06_timers/` — timer screen with pump schedule control loop
+- `keywords.txt` updated: `addTimerScreen`, `getTimerStart`, `getTimerEnd`, `isTimerEnabled`, `APA_LCD_MAX_TIMERS`, `APA_LCD_TIMER_EEPROM_ADDR`
+
+### Fixed
+
+- KB2 (left knob) rotation on the home screen now wakes the backlight regardless of home page count — previously `_touchInput()` was only called when `_nHomeCbs > 1`, so on single-page setups KB2 rotation did not restore brightness from DIM or OFF
+
+### Changed
+
+- `APALCDGUI_VERSION` bumped to `"1.2.0"`
+- State count: 9 → 11
+- EEPROM footprint: +7 bytes at address 502–508 (timer schedule)
+
+---
+
 ## [1.1.6] — 2026-05-31
 
 ### Added
