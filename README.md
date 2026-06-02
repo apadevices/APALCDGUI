@@ -1,7 +1,9 @@
 # APALCDGUI
 
+<img src="extras/apalcdgui.png" width="600" alt="APALCDGUI">
+
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.1.6](https://img.shields.io/badge/version-1.1.6-blue)
+· ![v1.2.3](https://img.shields.io/badge/version-1.2.3-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -11,9 +13,10 @@
 ### Display and navigation
 - Parallel 4-bit LiquidCrystal 20×4 LCD — no I2C module required
 - Two PEC11R quadrature rotary encoders, native ISR decoding — no external library
-- 9-state non-blocking machine: HOME, NAV, EDIT, FLASH_SAVE, FLASH_BACK, BRIGHTNESS, CONFIRM, RTC_NAV, RTC_EDIT
+- 12-state non-blocking machine: HOME, NAV, EDIT, FLASH_SAVE, FLASH_BACK, FLASH_ACTION, BRIGHTNESS, CONFIRM, RTC_NAV, RTC_EDIT, TIMER, TIMER_EDIT
 - Up to 4 submenu screens per side (left / right), configurable via `APA_LCD_MAX_SCREENS`
 - Multiple home screen pages — register up to 4 via `addHomeScreen()`, scroll with KB2 rotation
+- Inline timer schedule screen — up to 3 on/off time slots in 30-minute steps, auto-saved to EEPROM
 - 1, 2, or 3 fields per screen: INT, FLOAT, CHOICE, BOOL, ACTION, or READONLY
 
 ### Alert system
@@ -23,7 +26,7 @@
 
 ### Backlight
 - PWM brightness: ACTIVE → DIM → OFF with configurable timeout
-- Brightness persisted in EEPROM, adjusted via gesture (hold KB1 + rotate knob1)
+- Brightness persisted in EEPROM, adjusted via gesture (hold KB1 for 800 ms, then rotate knob1)
 - Off-timeout suspended while active alerts are pending
 
 ### Flexibility
@@ -74,9 +77,10 @@ EDIT ──── knob2 press ────────────────�
 
 NAV  ──── cursor on SAVE, press ─────────────────► FLASH_SAVE → onSave() → NAV
 NAV  ──── cursor on BACK, press ─────────────────► FLASH_BACK → HOME
+NAV  ──── cursor on ACTION field, press ─────────► FLASH_ACTION (► 300 ms) → action() → NAV
 
 Both buttons pressed ────────────────────────────► RTC_NAV (if setRTC() called)
-Hold KB1 + rotate knob1 ─────────────────────────► BRIGHTNESS adjust
+Hold KB1 for 800 ms, then rotate knob1 ──────────► BRIGHTNESS adjust
 ```
 
 ### Submenu screen layout
@@ -228,6 +232,99 @@ When only **one** page is registered (or `setHomeCallback()` used for a single s
 
 ---
 
+## Timer Schedule Screen
+
+The timer screen lets the operator set up to 3 on/off time slots directly on the LCD — no extra screens or menus needed. Each slot has a start and end time in 30-minute steps (00:00–23:30). A slot is disabled when both times are 00:00. Times are automatically saved to EEPROM when the operator presses SAVE and automatically loaded from EEPROM on `begin()`.
+
+### What the operator sees
+
+```
+      0         1         2
+      01234567890123456789
+Row0:  T1: 08:00-09:30
+Row1: ►T2: 13:00-15:00        ← cursor is on this row
+Row2:  T3: 00:00-00:00        ← 00:00-00:00 means disabled
+Row3: Total:  4h30m   SAVE
+```
+
+When the operator presses KB2 on a timer row, the start time is selected for inline editing:
+
+```
+Row1: ►T2:[08:00]09:00        ← [ ] marks the active field; KB2 rotate changes the time
+Row1: ►T2: 08:00[09:00]       ← after confirming start, end is selected
+```
+
+### Controls
+
+| Input | Action |
+|-------|--------|
+| KB2 rotate | Move cursor between T1 / T2 / T3 / SAVE |
+| KB2 press on timer row | Enter inline edit — start time first, then end |
+| KB2 press while editing | Confirm field and advance to the next (start → end → back to timer list) |
+| KB2 press on SAVE row | Write to EEPROM, fire optional callback, return HOME |
+| KB1 press | Return HOME, discard uncommitted edits |
+
+### Registration
+
+Call `addTimerScreen()` **after** all `addScreen()` calls on the same side. The timer screen always sits at the end of that side's rotation sequence.
+
+```cpp
+#include <APALCDGUI.h>
+
+APALCDGUI gui;
+
+void drawHome(LiquidCrystal& lcd) { /* ... */ }
+
+void onTimerSave() {
+    // Re-evaluate relay state immediately after the operator presses SAVE
+}
+
+void setup() {
+    gui.begin();
+    gui.addHomeScreen(drawHome);
+
+    // Regular submenu screens first
+    gui.addScreen(SCREEN_RIGHT, /* ... */);
+
+    // Timer screen last — always after addScreen() calls on the same side
+    gui.addTimerScreen(SCREEN_RIGHT, onTimerSave);  // onSave is optional
+}
+
+void loop() { gui.update(); }
+```
+
+### Reading timer values in your control loop
+
+```cpp
+void checkSchedule() {
+    uint16_t nowMin = hour * 60 + minute;  // minutes since midnight
+    bool shouldRun  = false;
+    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+        if (gui.isTimerEnabled(i) &&
+            nowMin >= gui.getTimerStart(i) &&
+            nowMin <  gui.getTimerEnd(i)) {
+            shouldRun = true;
+        }
+    }
+    // drive relay from shouldRun
+}
+```
+
+`getTimerStart(i)` and `getTimerEnd(i)` return minutes since midnight (0–1410). `isTimerEnabled(i)` returns `false` when both times are 00:00 (slot disabled). See `examples/06_timers/` for a complete pump control example.
+
+### Extending to 6 timer slots
+
+Define `APA_LCD_MAX_TIMERS` before including the library to increase slot count. The EEPROM address and layout expand automatically.
+
+```cpp
+#define APA_LCD_MAX_TIMERS 6
+#include <APALCDGUI.h>
+```
+
+> **Note:** The current LCD renderer shows one timer per row (rows 0–2) with SAVE on row 3. More than 3 timers requires a scrollable render not yet implemented. Keep `APA_LCD_MAX_TIMERS` at 3 for this release.
+
+---
+
 ## Understanding Field Factory Parameters
 
 Every field on a screen is created by a factory function. Here is a full breakdown of `fieldFloat`:
@@ -270,7 +367,8 @@ fieldChoice(label, uint8_t* index, const char* choices[])
 // On/off toggle — shows " ON " or "OFF "; rotate to preview, press to commit
 fieldBool(label, bool* val)
 
-// Button — shows "STRT" on SAVE; confirm=true adds a "Confirm action?" prompt first
+// Button — shows "STRT" on SAVE; pressing flashes ► for 300 ms then fires fn()
+// confirm=true adds a "Confirm action?" prompt (KB1=NO, KB2=YES) before firing
 fieldAction(label, void (*fn)(), confirm = false)
 
 // Display only — cursor skips this field; no editing possible
@@ -299,6 +397,7 @@ fieldReadonly(label, unit, float* val, decimals)
 | `addScreen(side, field1, onSave, title)` | Register a 1-field screen. |
 | `addScreen(side, field1, field2, onSave, title)` | Register a 2-field screen (most common). |
 | `addScreen(side, field1, field2, field3, onSave, title)` | Register a 3-field screen. |
+| `addTimerScreen(side, onSave)` | Register the timer schedule screen on `side`. Call after all `addScreen()` on that side. `onSave` is optional — times are saved to EEPROM regardless. |
 | `setRTC(DS3231*)` | Wire 800 ms both-buttons-hold gesture to built-in time/date modal. Requires build flag `-DAPA_LCD_USE_DS3231`. |
 
 ### Field factories
@@ -309,7 +408,7 @@ fieldReadonly(label, unit, float* val, decimals)
 | `fieldFloat(label, unit, float*, min, max, step, decimals)` | Float field, displayed with N decimal places. |
 | `fieldChoice(label, uint8_t*, const char*[])` | Cycles through null-terminated string array. Each string must be exactly 4 chars. |
 | `fieldBool(label, bool*)` | Toggle — shows `" ON "` / `"OFF "`. |
-| `fieldAction(label, fn, confirm=false)` | Button — shows `"STRT"`. `confirm=true` adds confirmation prompt. |
+| `fieldAction(label, fn, confirm=false)` | Button — shows `"STRT"`. Press flashes `►` for 300 ms then fires `fn()`. `confirm=true` adds a confirmation prompt first. |
 | `fieldReadonly(label, unit, float*, decimals)` | Display only — cursor skips this field. |
 
 ### Alerts
@@ -337,15 +436,18 @@ fieldReadonly(label, unit, float* val, decimals)
 |--------|-------------|
 | `setLongPressCallback(enc, fn)` | 800 ms hold: `0` = right knob (KB1), `1` = left knob (KB2). |
 | `setBothPressedCallback(fn)` | Both buttons within 200 ms — always wins over RTC modal. |
-| `showMessage(l1, l2, ms)` | Timed 2-line overlay covering rows 1–2. Default 1500 ms. |
+| `showMessage(l1, l2, ms)` | Timed message covering all 4 rows (line1→row 0, line2→row 1, rows 2–3 blanked). Default 1500 ms. |
 | `clearMessage()` | Dismiss overlay early. |
 | `markDirty()` | Schedule a full LCD redraw on the next `update()`. |
 | `isMenuActive()` | True when not at HOME. |
-| `isEditActive()` | True during EDIT or RTC_EDIT state. |
+| `isEditActive()` | True during EDIT, RTC_EDIT, or TIMER_EDIT state. |
 | `currentScreen()` | Screen position: `0` = HOME, `+N` = right screen N, `-N` = left screen N. |
 | `currentHomePage()` | Index of the currently displayed home page (0-based). |
 | `homePageCount()` | Number of home pages registered via `addHomeScreen()`. |
 | `getBrightness()` | Current backlight level (0–255, EEPROM-persisted). |
+| `getTimerStart(i)` | Start time for slot `i` in minutes since midnight (0–1410). Returns 0 if index out of range. |
+| `getTimerEnd(i)` | End time for slot `i` in minutes since midnight (0–1410). Returns 0 if index out of range. |
+| `isTimerEnabled(i)` | `true` when slot `i` has a non-zero start or end time (i.e., is not disabled). |
 
 ---
 
@@ -423,6 +525,7 @@ See `examples/04_rtc/04_rtc.ino` for a full working example with live clock disp
 | `examples/03_alerts/` | Passive and active alert system demonstration |
 | `examples/04_rtc/` | DS3231 real-time clock — live time display and time/date set modal |
 | `examples/05_multi_home/` | Three scrollable home pages with automatic page indicator |
+| `examples/06_timers/` | Timer schedule screen — pump control with 3 on/off slots and EEPROM persistence |
 
 ---
 
@@ -435,23 +538,25 @@ Define these **before** `#include <APALCDGUI.h>`:
 #define APA_LCD_MAX_HOME_SCREENS   4    // home screen pages scrolled by KB2 (default 4)
 #define APA_LCD_ACTIVE_ALERT_QUEUE 3    // simultaneous active alerts (default 3)
 #define APA_LCD_EEPROM_ADDR      500    // EEPROM base address (default 500, uses 2 bytes)
+#define APA_LCD_MAX_TIMERS         3    // timer slots on the schedule screen (default 3, max 6)
+#define APA_LCD_TIMER_EEPROM_ADDR  502  // EEPROM start address for timer data (default 502, uses 7 bytes)
 ```
 
 ---
 
 ## Platform Verification
 
-Compiled and size-checked with the 5-screen multi-home example (`APA_LCD_MAX_SCREENS=8`) on all supported platforms. Zero errors, zero library warnings.
+Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms. Zero errors, zero library warnings.
 
 | Platform | Board | Clock | RAM used | RAM total | Flash used | Flash total |
 |----------|-------|-------|----------|-----------|------------|-------------|
-| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 687 B | 8 192 B (21%) | 20 358 B | 253 952 B (8%) |
-| Arduino Uno | ATmega328P | 16 MHz | 1 675 B | 2 048 B (82%) | 18 456 B | 32 256 B (57%) |
-| ESP32 DevKit | ESP32 | 240 MHz | 23 932 B | 327 680 B (7%) | 298 269 B | 1 310 720 B (23%) |
-| ESP8266 D1 Mini | ESP8266 | 80 MHz | 30 564 B | 81 920 B (37%) | 282 871 B | 1 044 464 B (27%) |
-| STM32 Bluepill | STM32F103C8 | 72 MHz | 4 016 B | 20 480 B (20%) | 37 416 B | 65 536 B (57%) |
+| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 358 B | 8 192 B (17%) | 21 008 B | 253 952 B (8%) |
+| Arduino Uno | ATmega328P | 16 MHz | 1 346 B | 2 048 B (66%) | 19 106 B | 32 256 B (59%) |
+| ESP32 DevKit | ESP32 | 240 MHz | 23 372 B | 327 680 B (7%) | 299 201 B | 1 310 720 B (23%) |
+| ESP8266 D1 Mini | ESP8266 | 80 MHz | 29 976 B | 81 920 B (37%) | 283 983 B | 1 044 464 B (27%) |
+| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 440 B | 20 480 B (17%) | 38 144 B | 65 536 B (58%) |
 
-> The Uno row shows 81% RAM with the 8-screen example — that is the example sketch overhead including 8 `float` / `int16_t` globals and 8 screen registrations. The library core alone compiles cleanly. For production Uno use, a simpler 2–4 screen sketch will sit well below 50%.
+> The Uno row shows 66% RAM with the 4-screen example — that includes the full `02_8screens` sketch overhead (6 field types, 8 registrations capped at 4, home + alert callbacks). The library core alone is smaller. For production Uno use, a 2–3 screen sketch will sit comfortably below 50%.
 >
 > ESP32 and ESP8266 totals include the full Arduino framework (WiFi stack etc.) regardless of whether it is used.
 
