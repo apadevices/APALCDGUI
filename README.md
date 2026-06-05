@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.3.0](https://img.shields.io/badge/version-1.3.0-blue)
+· ![v1.4.0](https://img.shields.io/badge/version-1.4.0-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -24,6 +24,7 @@
 ### Alert system
 - Passive alerts: corner indicator (`[i]` / `[*]` / `[!]` flashing) — navigation not blocked
 - Active alerts: home screen takeover, queue of 3 — each requires operator acknowledgment
+- Status indicator: `setStatusIndicator('M')` shows `[M]` in the corner when no alert is pending — alert always takes priority
 - Automatic alert routing from APADOSE via user-supplied callback (libraries stay independent)
 
 ### Backlight
@@ -101,7 +102,7 @@ Row3: ►BACK    →2/4    ►SAVE
 - Cols 14–17: value (4 chars)
 - Cols 18–19: unit (2 chars)
 - Row 2 cols 0–16: `setMenuRow2Callback` output or optional screen title
-- Row 2 cols 17–19: `[i]` info / `[*]` warning / `[!]` critical alert indicator
+- Row 2 cols 17–19: `[i]` info / `[*]` warning / `[!]` critical alert indicator, or `[M]` status indicator when no alert is pending
 
 ### Home screen layout
 
@@ -117,7 +118,7 @@ Row3: System OK          2/3       ← cols 17–19: page indicator (library, on
 ```
 
 - Rows 0–3 cols 0–16 are entirely yours — write whatever you need.
-- **Row 2 cols 17–19**: passive alert indicator, always drawn by the library.
+- **Row 2 cols 17–19**: alert indicator (`[!]`/`[*]`/`[i]`) or status indicator (`[M]` etc.) when no alert — always drawn by the library.
 - **Row 3 cols 17–19**: page indicator (`1/3`, `2/3`, …) drawn automatically when more than one home page is registered. Only 1 page → no indicator, those 3 cols are yours.
 - If your callback writes to cols 17–19 of rows 2 or 3, the library overwrites it — avoid those positions.
 
@@ -312,7 +313,14 @@ void checkSchedule() {
 }
 ```
 
-`getTimerStart(i)` and `getTimerEnd(i)` return minutes since midnight (0–1410). `isTimerEnabled(i)` returns `false` when both times are 00:00 (slot disabled). See `examples/06_timers/` for a complete pump control example.
+`getTimerStart(i)` and `getTimerEnd(i)` return minutes since midnight (0–1410). `isTimerEnabled(i)` returns `false` when both times are 00:00 (slot disabled). `getTimerTotalMinutes()` returns the sum of all enabled slot durations — useful as a daily target for external pump controllers:
+
+```cpp
+// Bridge to APAPUMP daily target
+pump.begin(scheduleActive, nullptr, []() { return gui.getTimerTotalMinutes(); });
+```
+
+See `examples/06_timers/` for a complete pump control example.
 
 ### Extending to 6 timer slots
 
@@ -413,7 +421,7 @@ fieldReadonly(label, unit, float* val, decimals)
 | `fieldAction(label, fn, confirm=false)` | Button — shows `"STRT"`. Press flashes `►` for 300 ms then fires `fn()`. `confirm=true` adds a confirmation prompt first. |
 | `fieldReadonly(label, unit, float*, decimals)` | Display only — cursor skips this field. |
 
-### Alerts
+### Alerts and status indicator
 
 | Method | Description |
 |--------|-------------|
@@ -423,6 +431,8 @@ fieldReadonly(label, unit, float* val, decimals)
 | `postActiveAlert(l1, l2, level, ackCb)` | Add to active alert queue (max 3). Replaces home screen until acknowledged. |
 | `cancelActiveAlert()` | Remove current active alert silently (for auto-cleared alarms). |
 | `hasActiveAlert()` / `activeAlertCount()` | Query active alert state. |
+| `setStatusIndicator(char c)` | Show `[c]` in cols 17–19 row 2 when no alert is pending. Example: `'M'` for pump manual mode. Alert always takes priority. |
+| `clearStatusIndicator()` | Remove the status indicator; corner shows blank when no alert is pending. |
 
 ### Backlight and timeouts
 
@@ -450,6 +460,7 @@ fieldReadonly(label, unit, float* val, decimals)
 | `getTimerStart(i)` | Start time for slot `i` in minutes since midnight (0–1410). Returns 0 if index out of range. |
 | `getTimerEnd(i)` | End time for slot `i` in minutes since midnight (0–1410). Returns 0 if index out of range. |
 | `isTimerEnabled(i)` | `true` when slot `i` has a non-zero start or end time (i.e., is not disabled). |
+| `getTimerTotalMinutes()` | Sum of all enabled timer slot durations in minutes. Use as a daily target for external pump controllers. Returns 0 if no timers registered or all slots disabled. |
 
 ---
 
@@ -552,11 +563,11 @@ Compiled and size-checked with the `02_8screens` example using the default 4-scr
 
 | Platform | Board | Clock | RAM used | RAM total | Flash used | Flash total |
 |----------|-------|-------|----------|-----------|------------|-------------|
-| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 358 B | 8 192 B (17%) | 21 008 B | 253 952 B (8%) |
-| Arduino Uno | ATmega328P | 16 MHz | 1 346 B | 2 048 B (66%) | 19 106 B | 32 256 B (59%) |
-| ESP32 DevKit | ESP32 | 240 MHz | 23 372 B | 327 680 B (7%) | 299 201 B | 1 310 720 B (23%) |
-| ESP8266 D1 Mini | ESP8266 | 80 MHz | 29 976 B | 81 920 B (37%) | 283 983 B | 1 044 464 B (27%) |
-| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 440 B | 20 480 B (17%) | 38 144 B | 65 536 B (58%) |
+| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 361 B | 8 192 B (17%) | 21 326 B | 253 952 B (8%) |
+| Arduino Uno | ATmega328P | 16 MHz | 1 349 B | 2 048 B (66%) | 19 420 B | 32 256 B (60%) |
+| ESP32 DevKit | ESP32 | 240 MHz | 23 380 B | 327 680 B (7%) | 299 581 B | 1 310 720 B (23%) |
+| ESP8266 D1 Mini | ESP8266 | 80 MHz | 29 984 B | 81 920 B (37%) | 284 415 B | 1 044 464 B (27%) |
+| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 448 B | 20 480 B (17%) | 38 484 B | 65 536 B (59%) |
 
 > The Uno row shows 66% RAM with the 4-screen example — that includes the full `02_8screens` sketch overhead (6 field types, 8 registrations capped at 4, home + alert callbacks). The library core alone is smaller. For production Uno use, a 2–3 screen sketch will sit comfortably below 50%.
 >
