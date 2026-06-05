@@ -46,7 +46,7 @@
 #endif
 
 // ---- Version ----------------------------------------------------------------
-#define APALCDGUI_VERSION "1.3.0"
+#define APALCDGUI_VERSION "1.4.0"
 
 // ---- Capacity — define BEFORE #include to override --------------------------
 // These control compile-time array sizes; defining them after #include has no effect.
@@ -377,6 +377,17 @@ public:
     /** Returns true if a passive alert indicator is currently shown. */
     bool hasAlert() const;
 
+    // ---- Status indicator (cols 17–19 row 2, shown when no alert is pending) -----
+
+    /** Show a single-character status indicator when no alert is active.
+     *  Displayed as [c] — e.g. setStatusIndicator('M') shows [M] for pump manual mode.
+     *  Alert indicators always take priority: [!] > [*] > [i] > status indicator > blank.
+     *  Call clearStatusIndicator() to remove it. */
+    void setStatusIndicator(char c);
+
+    /** Remove the status indicator and show blank in cols 17–19 when no alert is pending. */
+    void clearStatusIndicator();
+
     // ---- Active alerts (latching, require operator acknowledgment) ----------
 
     /** Show a full-screen alarm that blocks the home screen until acknowledged.
@@ -461,6 +472,12 @@ public:
      *  Returns false if index >= APA_LCD_MAX_TIMERS. */
     bool isTimerEnabled(uint8_t index) const;
 
+    /** Returns the sum of all enabled timer slot durations in minutes.
+     *  Use as the dailyTargetCb bridge for APAPUMP:
+     *    pump.begin(scheduleActive, nullptr, []() { return gui.getTimerTotalMinutes(); })
+     *  Returns 0 if no timer screen is registered or all slots are disabled. */
+    uint16_t getTimerTotalMinutes() const;
+
 private:
     // ---- Private enums ------------------------------------------------------
     enum UIState : uint8_t {
@@ -544,12 +561,13 @@ private:
     bool     _msgActive;
     uint32_t _msgUntilMs;
 
-    // ---- Passive alert ------------------------------------------------------
+    // ---- Passive alert + status indicator -----------------------------------
     char       _passL1[17], _passL2[17];     // stored for built-in KB2 long-press detail view
     AlertLevel _passLevel;
     bool       _passActive;
     bool       _passFlash;   // current flash state for CRITICAL level
     uint32_t   _passFlashMs; // last flash toggle timestamp
+    char       _statusIndicator;             // [c] shown when no alert pending; 0 = none
 
     // ---- Active alert queue -------------------------------------------------
     AlertSlot _alertQ[APA_LCD_ACTIVE_ALERT_QUEUE];
