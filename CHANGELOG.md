@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0] — 2026-06-05
+
+### Added
+
+- `setStatusIndicator(char c)` / `clearStatusIndicator()` — show a single-character status indicator `[c]` in cols 17–19 row 2 when no passive alert is pending. Alert indicators always take priority: `[!]` > `[*]` > `[i]` > status indicator > blank. SRAM cost: 1 byte. Intended use: external libraries set e.g. `'M'` for pump manual-mode indication.
+- `getTimerTotalMinutes()` — returns the sum of all enabled timer slot durations in minutes. Used as a `dailyTargetCb` bridge for APAPUMP: `pump.begin(scheduleActive, nullptr, []() { return gui.getTimerTotalMinutes(); })`
+
 ## [1.3.0] — 2026-06-02
 
 ### Added
