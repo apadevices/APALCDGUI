@@ -276,7 +276,7 @@ void APALCDGUI::begin(
     _bothCb = nullptr; _bothArmed = false; _bothFired = false; _bothMs = 0;
     _msgActive = false; _msgUntilMs = 0;
     _passActive = false; _passFlash = false; _passFlashMs = 0;
-    _passL1[0] = '\0'; _passL2[0] = '\0';
+    _passL1[0] = '\0'; _passL2[0] = '\0'; _statusIndicator = 0;
     _alertHead = 0;
     _pendingAction = nullptr; _pendingLabel = nullptr;
     _rtcPtr = nullptr; _rtcSub = 0; _rtcCur = 0;
@@ -316,6 +316,14 @@ uint16_t APALCDGUI::getTimerEnd(uint8_t index) const {
 bool APALCDGUI::isTimerEnabled(uint8_t index) const {
     if (index >= APA_LCD_MAX_TIMERS) return false;
     return (_timerStart[index] != 0 || _timerEnd[index] != 0);
+}
+uint16_t APALCDGUI::getTimerTotalMinutes() const {
+    uint16_t total = 0;
+    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+        if (isTimerEnabled(i))
+            total += (uint16_t)(_timerEnd[i] - _timerStart[i]) * 30;
+    }
+    return total;
 }
 
 bool APALCDGUI::addScreen(ScreenSide side, const FieldDef& f1, void (*onSave)(),
@@ -412,6 +420,10 @@ void APALCDGUI::postAlert(const __FlashStringHelper* l1, const __FlashStringHelp
 }
 void APALCDGUI::clearAlert()     { _passActive = false; _dirty = true; }
 bool APALCDGUI::hasAlert() const  { return _passActive; }
+
+// ---- Status indicator -------------------------------------------------------
+void APALCDGUI::setStatusIndicator(char c) { _statusIndicator = c; _dirty = true; }
+void APALCDGUI::clearStatusIndicator()     { _statusIndicator = 0; _dirty = true; }
 
 // ---- Active alerts ---------------------------------------------------------
 void APALCDGUI::postActiveAlert(const char* l1, const char* l2, AlertLevel level, void (*cb)()) {
@@ -622,7 +634,16 @@ void APALCDGUI::_checkMenuTimeout() {
 // ---- Render: passive alert indicator — cols 17-19, row 2 ----
 void APALCDGUI::_renderPassiveCorner() {
     _lcd.setCursor(17, 2);
-    if (!_passActive) { _lcd.print(F("   ")); return; }
+    if (!_passActive) {
+        if (_statusIndicator) {
+            _lcd.write('[');
+            _lcd.write(_statusIndicator);
+            _lcd.write(']');
+        } else {
+            _lcd.print(F("   "));
+        }
+        return;
+    }
     uint32_t now = millis();
     if (_passLevel == ALERT_CRITICAL) {
         if (now - _passFlashMs >= APALCDGUI_ALERT_FLASH_MS) {
@@ -922,7 +943,7 @@ void APALCDGUI::_stateHome() {
         if (cb) cb(); // fire after state update so callback can call showMessage
     }
 
-    if (_passActive) _renderPassiveCorner();
+    if (_passActive || _statusIndicator) _renderPassiveCorner();
 }
 
 // ---- State: NAV ------------------------------------------------------------
@@ -995,7 +1016,7 @@ void APALCDGUI::_stateNav() {
         }
     }
 
-    if (_passActive) _renderPassiveCorner();
+    if (_passActive || _statusIndicator) _renderPassiveCorner();
 }
 
 // ---- State: EDIT -----------------------------------------------------------
@@ -1043,7 +1064,7 @@ void APALCDGUI::_stateEdit() {
         _setState(ST_NAV);
     }
 
-    if (_passActive) _renderPassiveCorner();
+    if (_passActive || _statusIndicator) _renderPassiveCorner();
 }
 
 // ---- State: FLASH_SAVE -----------------------------------------------------
@@ -1286,7 +1307,7 @@ void APALCDGUI::_stateTimer() {
         _setState(ST_HOME);
     }
 
-    if (_passActive) _renderPassiveCorner();
+    if (_passActive || _statusIndicator) _renderPassiveCorner();
 }
 
 // ---- State: TIMER_EDIT ------------------------------------------------------
@@ -1333,7 +1354,7 @@ void APALCDGUI::_stateTimerEdit() {
         _setState(ST_TIMER);
     }
 
-    if (_passActive) _renderPassiveCorner();
+    if (_passActive || _statusIndicator) _renderPassiveCorner();
 }
 
 // ---- update() ---------------------------------------------------------------
