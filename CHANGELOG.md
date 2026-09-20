@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.3] — 2026-09-20
+
+### Fixed
+
+- **Both-buttons RTC modal gesture (`setRTC()`) only worked reliably on a genuinely simultaneous double-press, confirmed by real-hardware testing and traced to the source.** `_checkBothPress()`'s "both held together" timer (`_bothMs`) can never start earlier than whichever button was pressed second, but `_checkLongPress()` independently raced each button's *own* individual press time against the same 800ms threshold — so whichever knob physically went down first (essentially always, since a human can't press two separate knobs at the exact same millisecond) crossed its own long-press threshold first and fired its single-button action (opening brightness) before the both-press gesture ever got a chance, permanently cancelling that attempt at the RTC modal. `_checkLongPress()` now skips individual per-button long-press detection entirely whenever both buttons are currently held, deferring fully to `_checkBothPress()` — the RTC modal (and any user `setBothPressedCallback()`) now opens reliably regardless of the natural timing offset between two physical button presses.
+
 ## [1.4.2] — 2026-09-20
 
 ### Fixed
