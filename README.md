@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.4.2](https://img.shields.io/badge/version-1.4.2-blue)
+· ![v1.4.3](https://img.shields.io/badge/version-1.4.3-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
