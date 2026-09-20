@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.4.2] — 2026-09-20
+
+### Fixed
+
+- `addHomeScreen()`/`setHomeCallback()`'s own doc comment (in `APALCDGUI.h`, `README.md`, and `docs/API.md`) claimed the home callback "is called on every `update()` while that page is shown" — **this was false**, and is almost certainly what led to the 1.4.1 `markDirty()` bug in the first place: the callback only runs when the screen is actually marked dirty (entering HOME, KB2 paging, an alert/status change, or an explicit `markDirty()` call), never on a hidden timer. Corrected everywhere, and cross-referenced from `markDirty()`'s own doc comment.
+- Documented, for the first time, that only row 3 is cleared automatically before the home callback runs — rows 0-2 retain whatever the previously-shown screen (a submenu, the RTC modal, the brightness screen) last drew, and the callback must pad every row it writes to the full 20-column width to avoid leftover text merging with its own content. This was already the Quick Start example's actual behavior (every row padded with trailing spaces) but was never explained in prose, so it was easy to miss — exactly what happened in APA-CONTROLLER's own first attempt at a home screen.
+
+### Changed
+
+- Softened "right knob"/"left knob" wording throughout the docs to "KB1 (knob1)"/"KB2 (knob2)" as the primary identifiers, with one clear note (in `APALCDGUI.h`'s top comment, `README.md`, and `docs/API.md`'s pin table) that physical left/right position is specific to the APA Devices HMI board v1.0's wiring — a different board can wire the two encoders to opposite physical positions, so knobs should be identified by function (KB1 navigates, KB2 edits), not by side.
+
 ## [1.4.1] — 2026-09-20
 
 ### Fixed
