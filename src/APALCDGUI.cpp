@@ -578,6 +578,16 @@ void APALCDGUI::_checkBothPress() {
 
 // ---- Long-press detection --------------------------------------------------
 void APALCDGUI::_checkLongPress() {
+    // Skip individual per-button long-press entirely while BOTH buttons are
+    // currently held: _bothMs (in _checkBothPress()) can never start earlier
+    // than whichever button was pressed second, so racing each button's own
+    // press time against the same 800ms threshold means whichever button went
+    // down first almost always wins -- firing its single-button action (e.g.
+    // opening brightness) and permanently cancelling the both-press gesture
+    // for this hold, since a human can't press two separate knobs at the
+    // exact same millisecond. Defer entirely to _checkBothPress() instead.
+    if (_enc[0].btnHeld && _enc[1].btnHeld) return;
+
     uint32_t now = millis();
     for (uint8_t i = 0; i < 2; i++) {
         if (_enc[i].btnHeld && !_enc[i].longFired) {
