@@ -45,8 +45,17 @@
 // ---- Note: do NOT call setBothPressedCallback() when using setRTC() ---------
 //   setBothPressedCallback takes priority and will suppress the RTC modal.
 
-// APA_LCD_USE_DS3231 must be defined (see above).
-// APALCDGUI.h includes Wire.h and DS3231.h automatically when the flag is set.
+// PlatformIO: set APA_LCD_USE_DS3231 in platformio.ini (see above).
+// Arduino IDE: uncomment the #define below — it must appear before the #include.
+// #define APA_LCD_USE_DS3231
+//
+// DS3231.h is included explicitly here (not left to APALCDGUI.h's own internal
+// #ifdef) so build tools that resolve dependencies by scanning this file's own
+// #include list -- such as PlatformIO's Library Dependency Finder -- actually
+// see that DS3231 is needed. Relying solely on the conditional include buried
+// inside APALCDGUI.h caused "DS3231.h: No such file" build failures even with
+// the correct build_flags and lib_deps set.
+#include <DS3231.h>
 #include <APALCDGUI.h>
 
 APALCDGUI gui;
@@ -83,7 +92,7 @@ void onTempSave() {}
 
 void drawHome(LiquidCrystal& lcd) {
     char fa[5], fb[5];
-    char buf[21];
+    char buf[22]; // 22 = worst-case int16_t (6 chars) + dtostrf (4) + fixed text (11) + NUL
 
     // Row 0: pH and ORP
     dtostrf(g_ph, 4, 2, fa);
@@ -159,6 +168,17 @@ void loop() {
         g_orp    += random(-3, 4);
         g_ph      = constrain(g_ph,  6.5f, 7.8f);
         g_orp     = constrain(g_orp, 500,  800);
+    }
+
+    // The home screen only redraws when markDirty() is called -- without this,
+    // the clock and simulated readings above would only ever refresh when the
+    // operator touches an encoder, since the library doesn't redraw HOME on a
+    // timer by itself. Skipped while a submenu is open so it doesn't force
+    // needless redraws of whatever the operator is currently editing.
+    static uint32_t lastClockTick = 0;
+    if (millis() - lastClockTick >= 1000 && !gui.isMenuActive()) {
+        lastClockTick = millis();
+        gui.markDirty();
     }
 
     gui.update();
