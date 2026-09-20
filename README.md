@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.4.1](https://img.shields.io/badge/version-1.4.1-blue)
+· ![v1.4.2](https://img.shields.io/badge/version-1.4.2-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -62,7 +62,9 @@ lib_deps =
 
 ## What It Does
 
-APALCDGUI drives a 20-column × 4-row parallel LCD and two rotary encoders as a complete menu system for pool automation hardware. The operator turns the right knob (knob1) to switch between parameter screens, turns the left knob (knob2) to move the cursor between fields, and presses the left knob to enter edit mode or confirm actions. Alarms appear either as a quiet corner indicator (passive) or as a full-screen takeover requiring acknowledgment (active). The backlight dims and extinguishes after inactivity, remembers the operator's preferred brightness, and wakes immediately on any knob movement.
+APALCDGUI drives a 20-column × 4-row parallel LCD and two rotary encoders as a complete menu system for pool automation hardware. The operator turns knob1 (KB1) to switch between parameter screens, turns knob2 (KB2) to move the cursor between fields, and presses knob2 to enter edit mode or confirm actions. Alarms appear either as a quiet corner indicator (passive) or as a full-screen takeover requiring acknowledgment (active). The backlight dims and extinguishes after inactivity, remembers the operator's preferred brightness, and wakes immediately on any knob movement.
+
+> **Note on "right"/"left" knob wording elsewhere in this README:** it describes the physical layout of the APA Devices HMI board v1.0 (KB1 wired to the right-hand connector, KB2 to the left-hand one). A different board can wire the two encoders to opposite physical positions — the pin arguments passed to `begin()` are what actually decide which physical knob is KB1 vs KB2, not which side it happens to sit on. Identify your knobs by function (KB1 navigates screens, KB2 edits) if your hardware differs from the reference board.
 
 ---
 
@@ -160,11 +162,16 @@ void loop() {
 }
 ```
 
+Two easy-to-miss details about the home callback above, both illustrated by the example:
+
+- **It only runs when the screen actually needs to redraw** (entering HOME, KB2 paging, an alert/status change, or an explicit `markDirty()` call) — **not on every `update()`**. Any home-screen content that should keep refreshing on its own (a clock, a live sensor reading) needs an explicit periodic `gui.markDirty()` call from your own `loop()`; the library has no hidden timer of its own.
+- **Only row 3 is cleared automatically** before your callback runs — rows 0-2 keep whatever the previously-shown screen (a submenu, the RTC modal, the brightness screen, ...) last drew there. That's why every `lcd.print()` call above pads its string to the full 20 columns with trailing spaces — skip that padding and a full-screen dialog's leftover text stays visible, merged with your own content, after returning to HOME.
+
 ---
 
 ## Multiple Home Screens
 
-Register up to 4 home pages with `addHomeScreen()`. When more than one page is registered, the operator scrolls between them by rotating **knob2 (left knob)** while on the home screen. The library automatically draws a page indicator (`1/3`, `2/3`, `3/3`) at **row 3 cols 17–19** so the operator always knows how many pages there are and which one is showing.
+Register up to 4 home pages with `addHomeScreen()`. When more than one page is registered, the operator scrolls between them by rotating **knob2 (KB2)** while on the home screen. The library automatically draws a page indicator (`1/3`, `2/3`, `3/3`) at **row 3 cols 17–19** so the operator always knows how many pages there are and which one is showing.
 
 `setHomeCallback()` still works as before — it is an alias for `addHomeScreen()`, so single-page sketches need no changes.
 
@@ -446,7 +453,7 @@ fieldReadonly(label, unit, float* val, decimals)
 
 | Method | Description |
 |--------|-------------|
-| `setLongPressCallback(enc, fn)` | 800 ms hold: `0` = right knob (KB1), `1` = left knob (KB2). |
+| `setLongPressCallback(enc, fn)` | 800 ms hold: `0` = KB1 (knob1), `1` = KB2 (knob2). |
 | `setBothPressedCallback(fn)` | Both buttons within 200 ms — always wins over RTC modal. |
 | `showMessage(l1, l2, ms)` | Timed message covering all 4 rows (line1→row 0, line2→row 1, rows 2–3 blanked). Default 1500 ms. |
 | `clearMessage()` | Dismiss overlay early. |
