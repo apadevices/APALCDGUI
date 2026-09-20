@@ -90,10 +90,16 @@ Initialises the LCD, attaches encoder interrupts, loads custom characters, and r
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `blPin` | 4 | PWM pin for backlight MOSFET gate |
-| `enc1Clk/Dt/Btn` | 2, 3, 10 | Right knob (knob1 / KB1) — screen navigation |
-| `enc2Clk/Dt/Btn` | 19, 18, 11 | Left knob (knob2 / KB2) — cursor and editing |
+| `enc1Clk/Dt/Btn` | 2, 3, 10 | KB1 (knob1) — screen navigation |
+| `enc2Clk/Dt/Btn` | 19, 18, 11 | KB2 (knob2) — cursor and editing |
 | `enc1Detents` | 4 | Pulses per physical click — 4 is correct for PEC11R |
 | `enc2Detents` | 4 | Same |
+
+> These defaults match the APA Devices HMI board v1.0's physical layout (KB1 wired to its
+> right-hand connector, KB2 to its left). A different board can wire the two encoders to
+> opposite physical positions — pass different pin numbers to `begin()` for your own wiring;
+> the functional roles (KB1 navigates, KB2 edits) come from which pins are passed here, not
+> from which side a knob happens to sit on.
 
 ---
 
@@ -113,9 +119,11 @@ Runs all GUI logic: reads encoders, processes button presses, handles timeouts, 
 ```cpp
 bool addHomeScreen(void (*fn)(LiquidCrystal& lcd));
 ```
-Registers a home screen page. Call once for a single page, or multiple times for a scrollable dashboard — the operator scrolls between pages by rotating **knob2 (left knob)** while on the home screen.
+Registers a home screen page. Call once for a single page, or multiple times for a scrollable dashboard — the operator scrolls between pages by rotating **knob2 (KB2)** while on the home screen.
 
-`fn` is called on every `update()` while that page is shown. Keep it fast — no `delay()`, no blocking calls. **The only callback that receives a parameter** — all others are `void(void)`.
+`fn` is called only when the home screen actually needs to redraw — entering HOME, KB2 paging, an alert/status change, or an explicit `markDirty()` call — **not on every `update()`**. Any content that should keep refreshing on its own (a clock, a live sensor reading) needs a periodic `markDirty()` call from your own `loop()`; there is no hidden timer inside the library. Keep `fn` fast either way — no `delay()`, no blocking calls. **The only callback that receives a parameter** — all others are `void(void)`.
+
+Only row 3 is cleared automatically before `fn` runs — rows 0-2 keep whatever the previously-shown screen (a submenu, the RTC modal, the brightness screen, ...) last drew there. Pad every row your callback writes to the full 20-column width, or that screen's leftover text stays visible, merged with your own content, after returning to HOME.
 
 Returns `false` if `APA_LCD_MAX_HOME_SCREENS` is already reached (default 4). To increase the limit, define it before `#include`:
 ```cpp
@@ -386,8 +394,8 @@ Display-only float. Cursor skips this field automatically — knob2 moves straig
 void setLongPressCallback(uint8_t encoder, void (*fn)());
 ```
 Fires after 800 ms button hold.
-- `encoder = 0` → right knob button (KB1 / knob1)
-- `encoder = 1` → left knob button (KB2 / knob2)
+- `encoder = 0` → KB1 button (knob1)
+- `encoder = 1` → KB2 button (knob2)
 
 **Built-in KB2 behaviour** (when no callback is registered for encoder 1): if a passive alert is active, shows the alert text as a 3-second overlay then clears it.
 
@@ -490,7 +498,7 @@ Covers all four rows with a timed message: `line1` is written to row 0, `line2` 
 void markDirty();  // schedule a full LCD redraw on the next update()
 ```
 
-Call when application data displayed on the current screen changes outside of a user edit.
+Call when application data displayed on the current screen changes outside of a user edit. **This is required for any home-screen content that should update on its own, including a clock** — the callback registered via `addHomeScreen()`/`setHomeCallback()` only runs when the screen is actually marked dirty, never on a hidden timer of its own. Call `markDirty()` periodically (e.g. once a second) from your own `loop()` for a home-screen clock to actually tick instead of freezing between button presses.
 
 ---
 
