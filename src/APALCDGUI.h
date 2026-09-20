@@ -13,11 +13,19 @@
 //   void loop() { gui.update(); }         // 3. loop — handle all input, drawing, alerts
 //
 // Controls:
-//   Right knob (knob1 / KB1) — rotate: navigate between screens
-//                               hold KB1 for 800 ms then rotate: adjust backlight brightness
-//   Left  knob (knob2 / KB2) — rotate: move cursor / change a value during editing
-//                               press:      enter edit mode, or confirm a selection
-//                               long press: show passive alert detail text, then dismiss it
+//   KB1 (knob1) — rotate: navigate between screens
+//                 hold KB1 for 800 ms then rotate: adjust backlight brightness
+//   KB2 (knob2) — rotate: move cursor / change a value during editing
+//                 press:      enter edit mode, or confirm a selection
+//                 long press: show passive alert detail text, then dismiss it
+//
+// "Right knob"/"left knob" labels used elsewhere in these docs describe KB1/KB2's
+// physical position on the APA Devices HMI board v1.0 specifically (enc1 wired to
+// the right-hand connector, enc2 to the left-hand one). A different board can wire
+// the two encoders to opposite physical positions -- identify your knobs by what
+// they DO (KB1 navigates screens, KB2 moves the cursor and edits values), not by
+// which side they happen to sit on, since that's a per-board wiring choice, not a
+// property of the library.
 //
 // Submenu screen layout (20 columns × 4 rows):
 //   row 0: [cursor][label (12 ch)][ ][value (4 ch)][unit (2 ch)]
@@ -167,8 +175,10 @@ public:
      *  All defaults match the APA Devices HMI board v1.0.
      *  Call once in setup() — must be called before addScreen() or update().
      *
-     *  enc1 = right knob (knob1 / KB1) — used for screen navigation and brightness.
-     *  enc2 = left  knob (knob2 / KB2) — used for cursor movement and value editing.
+     *  enc1 = KB1 (knob1) — used for screen navigation and brightness. Physical
+     *         position ("right knob" on the APA Devices HMI board v1.0) varies by
+     *         board wiring -- identify by function, not by side.
+     *  enc2 = KB2 (knob2) — used for cursor movement and value editing. Same caveat.
      *  encNDetents: encoder pulses per physical click — 4 is correct for PEC11R encoders. */
     void begin(
         uint8_t blPin = 4,
@@ -188,7 +198,16 @@ public:
     /** Register a home screen page.
      *  Call once for a single home screen or multiple times for a scrollable dashboard —
      *  KB2 rotation cycles through the pages when more than one is registered.
-     *  fn is called on every update() while that page is shown — keep it fast, no delay().
+     *  fn is called only when the home screen actually needs to redraw — entering
+     *  HOME, KB2 paging, an alert/status change, or any explicit markDirty() call —
+     *  NOT on every update() while that page is shown. For anything that should
+     *  keep refreshing on its own (a clock, a live sensor reading), call
+     *  markDirty() on your own timer; see markDirty()'s own doc comment.
+     *  Only row 3 is cleared automatically before fn runs — rows 0-2 keep whatever
+     *  the previously-shown screen (a submenu, the RTC modal, the brightness
+     *  screen, ...) last drew there. Pad every row your callback writes to the
+     *  full 20-column width, or that screen's leftover text stays visible,
+     *  merged with your own content, after returning to HOME.
      *  The LiquidCrystal& parameter is the only callback that receives a parameter;
      *  all other callbacks (onSave, ackCallback, long-press) are plain void(void).
      *  Returns false if APA_LCD_MAX_HOME_SCREENS is already reached. */
@@ -300,8 +319,8 @@ public:
     // ---- Gesture callbacks --------------------------------------------------
 
     /** Register a callback fired when an encoder button is held for 800 ms.
-     *  encoder: 0 = right knob button (KB1 / knob1)
-     *           1 = left  knob button (KB2 / knob2)
+     *  encoder: 0 = KB1 button (knob1)
+     *           1 = KB2 button (knob2)
      *  Built-in KB2 behaviour (when no callback is registered for encoder 1):
      *    if a passive alert is active, the alert text is shown as a 3-second
      *    message overlay, then the alert is automatically cleared. */
@@ -348,7 +367,13 @@ public:
     /** Schedule a full LCD redraw on the next update().
      *  Call this when application data displayed on the current screen changes
      *  outside of a user edit — for example when a background task updates a
-     *  sensor value shown by setMenuRow2Callback(). */
+     *  sensor value shown by setMenuRow2Callback(). This is required for ANY
+     *  home-screen content that should update on its own, including a clock:
+     *  the home callback registered via addHomeScreen()/setHomeCallback() only
+     *  runs when the screen is actually marked dirty, never on a hidden timer of
+     *  its own — call markDirty() periodically (e.g. once a second) for a
+     *  home-screen clock to actually tick instead of freezing between button
+     *  presses. */
     void markDirty();
 
     // ---- Passive alerts (informational, non-blocking) -----------------------
