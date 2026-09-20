@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.1] — 2026-09-20
+
+### Fixed
+
+- `examples/04_rtc`: the home screen's "live clock" never actually refreshed on its own — the library only redraws HOME when `markDirty()` is called, and the example never called it, so the clock (and the simulated pH/ORP readings) froze after the first draw until the operator touched an encoder. Added a 1-second `markDirty()` tick, skipped while a submenu is open so it doesn't force needless redraws of whatever the operator is editing.
+- `examples/04_rtc`: added an explicit `#include <DS3231.h>` before `#include <APALCDGUI.h>`, matching the requirement already documented in `APALCDGUI.h`'s own header comment. Relying solely on the conditional `#include` buried inside `APALCDGUI.h` caused build tools that resolve dependencies by scanning a sketch's own top-level includes (e.g. PlatformIO's Library Dependency Finder) to miss that DS3231 is needed at all, producing a `DS3231.h: No such file` error even with correct `build_flags`/`lib_deps`.
+- `examples/04_rtc`: `buf[21]` in `drawHome()` was one byte too small for its worst-case content (`int16_t` at 6 chars + `dtostrf` output + fixed text + NUL = 22); widened to `buf[22]`.
+- `keywords.txt`: the 1.2.0 timer-screen additions (`addTimerScreen`, `getTimerStart`, `getTimerEnd`, `isTimerEnabled`, `APA_LCD_MAX_TIMERS`, `APA_LCD_TIMER_EEPROM_ADDR`) were implemented and documented but never actually added to this file — added now.
+
 ## [1.4.0] — 2026-06-05
 
 ### Added
