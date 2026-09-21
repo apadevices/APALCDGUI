@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0] — 2026-09-21
+
+### Added
+
+- **Generic two-point guided calibration screen**: `addCalibrationScreen()`, `startCalibration()`, `setCalMessage()`, and a new `ST_CAL_PROMPT` state (12 → 13 states). APALCDGUI has no concept of what is being calibrated — the two known-value parameters and two callbacks fully describe the process, so one registration serves any two-point sensor (pH, ORP, or otherwise). Launched as a modal from a `FIELD_CHOICE`-toggle-plus-`onSave()` pattern (recommended, matches every other settings screen's select-toggle-then-SAVE convention), not KB1-navigable. New capacity constant `APA_LCD_MAX_CAL_SCREENS` (default 2), new timing constants `APALCDGUI_CAL_CAPTURED_MS` (1500ms) and `APALCDGUI_CAL_RESULT_MS` (3000ms). Developed and real-hardware-verified (both a pH-shaped and an ORP-shaped calibration) against `apadevices/APAPHX2_ADS1115` as the reference sensor library. See `docs/API.md`'s new "Calibration screen" section and `examples/07_calibration/` for a complete working example.
+
+### Fixed
+
+- **`_checkMenuTimeout()` never exempted the new calibration-prompt state**, so the ~200-560s blocking capture inside a real sensor's `calibratePoint1()`/`calibratePoint2()` left the idle timer stale, forcing an immediate return to HOME the instant the first calibration point finished — before the second point's prompt was ever reachable. Fixed by adding `ST_CAL_PROMPT` to the same exemption already given to the RTC modal — this is also the operationally correct behavior, since a real operator rinsing a probe and preparing the next buffer solution genuinely needs more than the default 60s idle window.
+- **`_stateFlashSave()` silently discarded a state change made by the screen's own `onSave()` callback.** It called `onSave()` first, then unconditionally forced `ST_NAV` right after — so an `onSave()` that itself calls `startCalibration()` (which transitions to `ST_CAL_PROMPT`) had that transition immediately overwritten, indistinguishable from `onSave()` having done nothing. Fixed generally (not calibration-specific): the function now snapshots `_state` before calling `onSave()` and only forces the normal `ST_NAV`/"Settings saved!" behavior if `onSave()` didn't already redirect elsewhere — any future feature that wants its own `onSave()` to launch another screen or modal now works safely.
+- **`_blUpdate()` (backlight dim/off) shares the same `_inputMs`-staleness hazard as the menu-timeout bug above, and was missed the first time.** `_inputMs` "feeds both timeouts" but only the menu-timeout one was exempted initially. Without a fix, the first `_blUpdate()` call after a multi-minute blocking calibration capture could snap the backlight straight to dim or fully off right when the operator needs to read the result. Fixed by refreshing `_inputMs` (via `_touchInput()`) immediately after each blocking capture call returns.
+- Calibration prompt's row-3 button hint listed KB1/KB2 in the wrong order (`"KB2=Go...KB1=Back"`) relative to the RTC modal's own established convention (KB1's action left, KB2's right — `">*NO...*YES"`). Fixed to `"KB1=Back     KB2=Go"`. Buttons themselves always worked correctly — purely a mislabeled hint.
+- `addCalibrationScreen()`'s own doc comment in `APALCDGUI.h` showed a stale `FIELD_ACTION`-based usage example, superseded by the `FIELD_CHOICE`+`onSave()` redesign above. Corrected to the real, hardware-confirmed pattern.
+
 ## [1.4.3] — 2026-09-20
 
 ### Fixed
