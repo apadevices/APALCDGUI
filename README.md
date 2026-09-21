@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.4.3](https://img.shields.io/badge/version-1.4.3-blue)
+· ![v1.5.0](https://img.shields.io/badge/version-1.5.0-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -15,10 +15,11 @@
 ### Display and navigation
 - Parallel 4-bit LiquidCrystal 20×4 LCD — no I2C module required
 - Two PEC11R quadrature rotary encoders, native ISR decoding — no external library
-- 12-state non-blocking machine: HOME, NAV, EDIT, FLASH_SAVE, FLASH_BACK, FLASH_ACTION, BRIGHTNESS, CONFIRM, RTC_NAV, RTC_EDIT, TIMER, TIMER_EDIT
+- 13-state non-blocking machine: HOME, NAV, EDIT, FLASH_SAVE, FLASH_BACK, FLASH_ACTION, BRIGHTNESS, CONFIRM, RTC_NAV, RTC_EDIT, TIMER, TIMER_EDIT, CAL_PROMPT
 - Up to 4 submenu screens per side (left / right), configurable via `APA_LCD_MAX_SCREENS`
 - Multiple home screen pages — register up to 4 via `addHomeScreen()`, scroll with KB2 rotation
 - Inline timer schedule screen — up to 3 on/off time slots in 30-minute steps, auto-saved to EEPROM
+- Generic two-point guided calibration screen — `addCalibrationScreen()`, works with any sensor's own calibration process (see below)
 - 1, 2, or 3 fields per screen: INT, FLOAT, CHOICE, BOOL, ACTION, or READONLY
 
 ### Alert system
@@ -32,6 +33,12 @@
 - Brightness persisted in EEPROM, adjusted via gesture (hold KB1 for 800 ms, then rotate knob1)
 - Off-timeout suspended while active alerts are pending
 
+### Calibration
+- Generic two-point guided wizard — no dependency on any sensor library, works with any two-point calibration process
+- Recommended entry pattern: `FIELD_CHOICE` toggle + `onSave()`, consistent with every other settings screen (select → toggle → SAVE commits)
+- Live progress messages via `setCalMessage()` — routed straight from your sensor's own `setMessageCallback()`
+- Persistence is always the caller's responsibility — this screen never saves anything itself
+
 ### Flexibility
 - Factory functions for all field types — beginners never fill a struct by hand
 - BOOL toggle field and ACTION confirmation dialog added in v1.1
@@ -43,7 +50,7 @@
 - No heap allocation — `LiquidCrystal` is a direct class member, initialised in the constructor
 - ISR singleton: one static instance pointer, two static ISR stubs — fully portable
 - `F()` macro on all string literals — zero SRAM cost for labels on AVR
-- Zero `delay()` calls — `update()` always returns within one loop iteration
+- No `delay()` calls anywhere in the normal state machine — `update()` always returns within one loop iteration, with one deliberate, documented exception: the calibration screen's own result-display pauses (`APALCDGUI_CAL_CAPTURED_MS`/`APALCDGUI_CAL_RESULT_MS`), safe because the calling code is already blocked for minutes inside the sensor's own capture call at that point
 
 ---
 
@@ -546,6 +553,7 @@ See `examples/04_rtc/04_rtc.ino` for a full working example with live clock disp
 | `examples/04_rtc/` | DS3231 real-time clock — live time display and time/date set modal |
 | `examples/05_multi_home/` | Three scrollable home pages with automatic page indicator |
 | `examples/06_timers/` | Timer schedule screen — pump control with 3 on/off slots and EEPROM persistence |
+| `examples/07_calibration/` | Generic two-point guided calibration screen — `FIELD_CHOICE` entry, simulated sensor capture |
 
 ---
 
