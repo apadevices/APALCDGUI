@@ -317,6 +317,80 @@ Hold KB1 + KB2 for 800 ms  →  TIME screen  (HH : MM : SS)
 
 ---
 
+## Calibration screen
+
+```cpp
+int8_t addCalibrationScreen(const __FlashStringHelper* title,
+                             const __FlashStringHelper* point1Label, float point1KnownValue,
+                             const __FlashStringHelper* point2Label, float point2KnownValue,
+                             float (*onPoint1)(float knownValue),
+                             bool  (*onPoint2)(float knownValue));
+
+void startCalibration(uint8_t index);
+void setCalMessage(const __FlashStringHelper* msg);
+```
+
+A generic, reusable two-point guided calibration wizard. APALCDGUI has **no concept of what is
+being calibrated** — the two known-value parameters and two callbacks fully describe the process,
+so one registration serves any two-point sensor (pH, ORP, or something unrelated).
+
+**`addCalibrationScreen()`** registers the wizard and returns its index (pass to
+`startCalibration()`), or `-1` if `APA_LCD_MAX_CAL_SCREENS` is already reached. Not tied to a
+screen side or position — it isn't KB1-navigable, it's launched as a modal (see below).
+
+- `onPoint1(knownValue)` — perform the first-point capture, typically a blocking call into your
+  sensor library (e.g. `phSensor.calibratePoint1()`). Return the measured value, shown to the
+  operator as `"Captured: X mV"`.
+- `onPoint2(knownValue)` — perform the second-point capture and finalise. Return `true` on success.
+  **You are responsible for persisting the result** (e.g. calling your sensor's own
+  `saveCalibration()`) before returning `true` — this screen never persists anything itself.
+- Both callbacks run synchronously from inside `update()` and block for as long as your sensor's
+  own capture call does — this is expected and accepted, not a limitation to work around.
+
+**`startCalibration(index)`** launches a registered wizard. No-op if `index` is out of range or a
+calibration is already in progress. **Recommended entry pattern** — a `FIELD_CHOICE` toggle +
+`onSave()`, matching how every other settings screen in this library already works (select → toggle
+→ SAVE commits), rather than `FIELD_ACTION`, which fires immediately on selection with no toggle:
+
+```cpp
+int8_t phCalIdx;
+static const char* calChoices[] = {"-no-", "STRT", nullptr};
+uint8_t phCalChoice = 0;
+
+void onCalSave() {
+    if (phCalChoice == 1) { phCalChoice = 0; gui.startCalibration(phCalIdx); }
+}
+
+phCalIdx = gui.addCalibrationScreen(F("pH Calibration"),
+               F("Place in pH 4.0"), 4.0f, F("Place in pH 7.0"), 7.0f,
+               onPhPoint1, onPhPoint2);
+gui.addScreen(SCREEN_RIGHT, APALCDGUI::fieldChoice(F("pH Cal"), &phCalChoice, calChoices),
+              onCalSave, F("Calibration"));
+```
+
+**`setCalMessage(msg)`** — for your sensor's own `setMessageCallback()` to forward into:
+```cpp
+phSensor.setMessageCallback([](const __FlashStringHelper* m) { gui.setCalMessage(m); });
+```
+**Synchronous** — writes row 2 directly to the physical LCD the instant it's called, rather than
+waiting for the next `update()`. `update()` cannot run while your code is blocked inside the
+sensor's own calibration call, so the normal `markDirty()`/dirty-flag redraw path would never fire
+during the exact window this message is meant to be seen in. Calls outside an active calibration
+are ignored.
+
+**Screen layout:** row 0 = title, row 1 = the current point's label (or the capture/result status
+once KB2 is pressed), row 2 = live `setCalMessage()` text, row 3 = a static `KB1=Back  KB2=Go` hint.
+KB1 cancels only before capture starts — once a capture is running there is no code executing to
+service a button press until it returns (see the timing note above). After each point completes,
+the result (`"Captured: X mV"` or the final `"Calibration OK!"`/`"Calibration FAILED"`) is shown for
+`APALCDGUI_CAL_CAPTURED_MS`/`APALCDGUI_CAL_RESULT_MS` respectively before advancing.
+
+See `examples/07_calibration/07_calibration.ino` for a complete working example (a fake, short
+capture stands in for a real sensor's own multi-minute calibration call, so the example stays
+practical to actually run).
+
+---
+
 ## Field factory helpers
 
 All factory functions return a `FieldDef` value. Pass directly inside `addScreen()`.
@@ -547,6 +621,7 @@ enum FieldType   : uint8_t { FIELD_INT, FIELD_FLOAT, FIELD_CHOICE,
 #define APA_LCD_MAX_HOME_SCREENS   4    // home screen pages scrolled by KB2 (default 4)
 #define APA_LCD_ACTIVE_ALERT_QUEUE 3    // simultaneous active alerts (default 3)
 #define APA_LCD_MAX_TIMERS         3    // timer slots on the timer screen (default 3, up to 6)
+#define APA_LCD_MAX_CAL_SCREENS    2    // registered calibration screens (default 2, e.g. pH + ORP)
 #define APA_LCD_EEPROM_ADDR      500    // brightness EEPROM base address (default 500, 2 bytes)
 #define APA_LCD_TIMER_EEPROM_ADDR 502   // timer schedule EEPROM address (default 502, 7 bytes)
 ```
@@ -576,6 +651,8 @@ build_flags = -DAPA_LCD_MAX_SCREENS=8
 | `APALCDGUI_BRIGHTNESS_DEFAULT` | 200 | Active PWM level (0–255) |
 | `APALCDGUI_BRIGHTNESS_DIM` | 50 | Dim PWM level (0–255) |
 | `APALCDGUI_BRIGHTNESS_STEP` | 10 | Change per click in brightness adjust |
+| `APALCDGUI_CAL_CAPTURED_MS` | 1 500 | "Captured: X mV" pause between calibration points 1 and 2 (ms) |
+| `APALCDGUI_CAL_RESULT_MS` | 3 000 | "Calibration OK!"/"FAILED" pause at the end of the flow (ms) |
 
 ---
 
