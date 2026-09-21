@@ -74,6 +74,10 @@
 #define APA_LCD_MAX_TIMERS 3           // timer slots (default 3; up to 6 supported with scroll)
 #endif
 
+#ifndef APA_LCD_MAX_CAL_SCREENS
+#define APA_LCD_MAX_CAL_SCREENS 2      // registered calibration screens (default 2, e.g. pH + ORP)
+#endif
+
 // ---- EEPROM base address — define before #include only if address 500 collides -----------
 #ifndef APA_LCD_EEPROM_ADDR
 #define APA_LCD_EEPROM_ADDR 500        // 2 bytes: brightness(500) + validity marker(501)
@@ -91,6 +95,8 @@ constexpr uint32_t APALCDGUI_BOTH_PRESS_MS      = 200UL;    // both-pressed wind
 constexpr uint32_t APALCDGUI_FLASH_SAVE_MS      = 500UL;    // SAVE flash duration
 constexpr uint32_t APALCDGUI_FLASH_BACK_MS      = 300UL;    // BACK flash duration
 constexpr uint32_t APALCDGUI_ALERT_FLASH_MS     = 500UL;    // critical blink period
+constexpr uint32_t APALCDGUI_CAL_CAPTURED_MS    = 1500UL;   // "Captured: X mV" pause (between points 1 and 2)
+constexpr uint32_t APALCDGUI_CAL_RESULT_MS      = 3000UL;   // "Calibration OK!/FAILED" pause (end of flow)
 constexpr uint8_t  APALCDGUI_BTN_DEBOUNCE_MS    = 50;       // button debounce window
 constexpr uint8_t  APALCDGUI_BRIGHTNESS_DEFAULT = 200;      // active PWM (0-255)
 constexpr uint8_t  APALCDGUI_BRIGHTNESS_DIM     = 50;       // dim PWM
@@ -503,6 +509,64 @@ public:
      *  Returns 0 if no timer screen is registered or all slots are disabled. */
     uint16_t getTimerTotalMinutes() const;
 
+    // ---- Calibration screen (optional, generic two-point guided wizard) -----
+
+    /** Register a two-point guided calibration screen. Launched via
+     *  startCalibration() — call it from wherever fits your screen design.
+     *  Recommended: a FIELD_CHOICE toggle + onSave(), matching how every other
+     *  settings screen in this library works (select -> toggle -> SAVE
+     *  commits), rather than a FIELD_ACTION button, which fires immediately on
+     *  selection with no toggle at all:
+     *    int8_t phCalIdx;
+     *    static const char* calChoices[] = {"-no-", "STRT", nullptr};
+     *    uint8_t phCalChoice = 0;
+     *    void onCalSave() {
+     *        if (phCalChoice == 1) { phCalChoice = 0; gui.startCalibration(phCalIdx); }
+     *    }
+     *    ...
+     *    phCalIdx = gui.addCalibrationScreen(F("pH Calibration"),
+     *                   F("Place in pH 4.0"), 4.0f, F("Place in pH 7.0"), 7.0f,
+     *                   onPhPoint1, onPhPoint2);
+     *    gui.addScreen(SCREEN_RIGHT, APALCDGUI::fieldChoice(F("pH Cal"), &phCalChoice, calChoices),
+     *                  onCalSave, F("Calibration"));
+     *
+     *  Generic — APALCDGUI has no concept of what sensor is being calibrated;
+     *  the two known-value parameters and two callbacks fully describe it, so
+     *  one registration serves any two-point sensor (pH, ORP, or otherwise).
+     *
+     *  onPoint1(knownValue): perform the first-point capture — typically a
+     *    blocking call into your sensor library (e.g. phSensor.calibratePoint1()).
+     *    Return the measured value, shown to the operator as "Captured: X mV".
+     *  onPoint2(knownValue): perform the second-point capture and finalise.
+     *    Return true on success. YOU are responsible for persisting the result
+     *    (e.g. calling your sensor's own saveCalibration()) before returning
+     *    true — this screen never persists anything itself.
+     *  Both callbacks are called synchronously from inside update() and will
+     *  block for as long as your sensor's own capture call does.
+     *
+     *  Returns the registered index (pass to startCalibration()), or -1 if
+     *  APA_LCD_MAX_CAL_SCREENS is already reached. */
+    int8_t addCalibrationScreen(const __FlashStringHelper* title,
+                                 const __FlashStringHelper* point1Label, float point1KnownValue,
+                                 const __FlashStringHelper* point2Label, float point2KnownValue,
+                                 float (*onPoint1)(float knownValue),
+                                 bool  (*onPoint2)(float knownValue));
+
+    /** Launch a registered calibration screen (see addCalibrationScreen()).
+     *  No-op if index is out of range or a calibration is already in progress. */
+    void startCalibration(uint8_t index);
+
+    /** For your sensor's own setMessageCallback() to forward into during
+     *  calibration, e.g.:
+     *    phSensor.setMessageCallback([](const __FlashStringHelper* m) { gui.setCalMessage(m); });
+     *  SYNCHRONOUS — writes row 2 directly to the physical LCD the instant
+     *  it's called, rather than waiting for the next update(). update() cannot
+     *  run while your code is blocked inside the sensor's own calibration call,
+     *  so the normal markDirty()/dirty-flag redraw path would never fire during
+     *  the exact window this message is meant to be seen in. Calls outside an
+     *  active calibration are ignored. */
+    void setCalMessage(const __FlashStringHelper* msg);
+
 private:
     // ---- Private enums ------------------------------------------------------
     enum UIState : uint8_t {
@@ -511,7 +575,8 @@ private:
         ST_BRIGHTNESS,
         ST_CONFIRM,
         ST_RTC_NAV, ST_RTC_EDIT,
-        ST_TIMER, ST_TIMER_EDIT
+        ST_TIMER, ST_TIMER_EDIT,
+        ST_CAL_PROMPT
     };
     enum BlStage : uint8_t { BL_ACTIVE, BL_DIM, BL_OFF };
 
@@ -537,6 +602,16 @@ private:
         ScreenSide                   side;
         uint8_t                      fieldCount; // 1, 2, or 3
         const __FlashStringHelper*   title;      // shown on row 2 when no row2Cb; nullptr = off
+    };
+
+    struct CalScreen {
+        const __FlashStringHelper* title;
+        const __FlashStringHelper* point1Label;
+        float                      point1KnownValue;
+        const __FlashStringHelper* point2Label;
+        float                      point2KnownValue;
+        float                    (*onPoint1)(float knownValue);
+        bool                     (*onPoint2)(float knownValue);
     };
 
     struct AlertSlot {
@@ -630,6 +705,13 @@ private:
     uint8_t  _timerOrigStart;                 // saved start slot when entering edit — restored on KB1 cancel
     uint8_t  _timerOrigEnd;                   // saved end   slot when entering edit — restored on KB1 cancel
 
+    // ---- Calibration screen (registered, not KB1-navigable — launched via a
+    // FIELD_ACTION button and returns to ST_NAV, same shape as ST_CONFIRM) ----
+    CalScreen _calScreens[APA_LCD_MAX_CAL_SCREENS];
+    uint8_t   _nCalScreens;
+    int8_t    _calActiveIdx;                  // -1 = no calibration in progress
+    uint8_t   _calStep;                       // 0 = point 1 pending, 1 = point 2 pending
+
     // ---- ISR singleton (one LCD + two encoders per board) -------------------
     static APALCDGUI* _inst;
     static void _isr0();
@@ -654,6 +736,7 @@ private:
     void _stateRTCEdit();
     void _stateTimer();
     void _stateTimerEdit();
+    void _stateCalPrompt();
 
     void _checkBothPress();
     void _checkMenuTimeout();
@@ -667,6 +750,7 @@ private:
     void _renderPassiveCorner();
     void _renderHome();
     void _renderTimer();
+    void _renderCalPrompt();
 
     void _rowWrite(uint8_t row, const char* text);           // write COLS chars, space-pad
     void _padWrite(uint8_t col, uint8_t row,                 // write width chars, space-pad
