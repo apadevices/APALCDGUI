@@ -285,6 +285,7 @@ void APALCDGUI::begin(
     _timerOrigStart = 0; _timerOrigEnd = 0;
     _timerBits.cursor = 0; _timerBits.editField = 0; _timerBits.viewTop = 0;
     _loadTimerEEPROM();
+    _nCalScreens = 0; _calActiveIdx = -1; _calStep = 0;
     _ready = true;
 }
 
@@ -324,6 +325,37 @@ uint16_t APALCDGUI::getTimerTotalMinutes() const {
             total += (uint16_t)(_timerEnd[i] - _timerStart[i]) * 30;
     }
     return total;
+}
+
+int8_t APALCDGUI::addCalibrationScreen(const __FlashStringHelper* title,
+                                        const __FlashStringHelper* point1Label, float point1KnownValue,
+                                        const __FlashStringHelper* point2Label, float point2KnownValue,
+                                        float (*onPoint1)(float), bool (*onPoint2)(float)) {
+    if (_nCalScreens >= APA_LCD_MAX_CAL_SCREENS) return -1;
+    CalScreen& c = _calScreens[_nCalScreens];
+    c.title            = title;
+    c.point1Label      = point1Label;
+    c.point1KnownValue = point1KnownValue;
+    c.point2Label      = point2Label;
+    c.point2KnownValue = point2KnownValue;
+    c.onPoint1         = onPoint1;
+    c.onPoint2         = onPoint2;
+    return (int8_t)_nCalScreens++;
+}
+
+void APALCDGUI::startCalibration(uint8_t index) {
+    if (index >= _nCalScreens) return;
+    if (_calActiveIdx >= 0) return;  // already mid-calibration
+    _calActiveIdx = (int8_t)index;
+    _calStep      = 0;
+    _setState(ST_CAL_PROMPT);
+}
+
+void APALCDGUI::setCalMessage(const __FlashStringHelper* msg) {
+    if (_state != ST_CAL_PROMPT) return; // ignore stray calls outside an active calibration
+    char buf[COLS + 1];
+    _fstr(buf, msg, COLS);
+    _rowWrite(2, buf); // synchronous — update() cannot run during the blocking capture call
 }
 
 bool APALCDGUI::addScreen(ScreenSide side, const FieldDef& f1, void (*onSave)(),
@@ -618,12 +650,21 @@ void APALCDGUI::_checkLongPress() {
 // ---- Menu timeout ----------------------------------------------------------
 void APALCDGUI::_checkMenuTimeout() {
     if (_menuSec == 0) return;
-    if (_state == ST_HOME || _state == ST_RTC_NAV || _state == ST_RTC_EDIT) return;
+    // ST_CAL_PROMPT exempted for the same reason as the RTC modal: _inputMs is
+    // stamped once, right before a ~200-560s blocking calibratePoint1/2() call
+    // starts, and nothing refreshes it during that block. Without this
+    // exemption, the very first update() after the block returns sees
+    // "elapsed" far past the menu timeout and immediately forces ST_HOME --
+    // before the operator ever gets to act on the point-2 prompt. Real
+    // operator workflow (rinse probe, prepare next buffer solution) also
+    // genuinely needs more than the default 60s between points.
+    if (_state == ST_HOME || _state == ST_RTC_NAV || _state == ST_RTC_EDIT || _state == ST_CAL_PROMPT) return;
     uint32_t totalMs = (uint32_t)_menuSec * 1000UL;
     uint32_t elapsed = millis() - _inputMs;
     if (elapsed >= totalMs) {
         _timeoutWarnSec = 0xFF;
         _scrPos = 0;
+        _calActiveIdx = -1; // guard: a stale index here would wrongly block the next startCalibration()
         _setState(ST_HOME);
         return;
     }
@@ -877,6 +918,22 @@ void APALCDGUI::_renderTimer() {
     _renderPassiveCorner();
 }
 
+// ---- Render: calibration prompt ---------------------------------------------
+// Row 0: title. Row 1: current step's label. Row 2: reserved for setCalMessage()
+// (blank until the sensor's own message callback writes something during the
+// blocking capture). Row 3: static Go/Cancel hint.
+void APALCDGUI::_renderCalPrompt() {
+    if (_calActiveIdx < 0) return;
+    const CalScreen& c = _calScreens[_calActiveIdx];
+    char buf[COLS + 1];
+    _fstr(buf, c.title, COLS);
+    _rowWrite(0, buf);
+    _fstr(buf, (_calStep == 0) ? c.point1Label : c.point2Label, COLS);
+    _rowWrite(1, buf);
+    _rowWrite(2, "");
+    _rowWrite(3, "KB1=Back     KB2=Go");
+}
+
 // ---- Render: active alert screen -------------------------------------------
 void APALCDGUI::_renderAlertScreen() {
     uint8_t count = _alertCount();
@@ -1087,10 +1144,17 @@ void APALCDGUI::_stateFlashSave() {
     }
     if (millis() - _stateMs >= APALCDGUI_FLASH_SAVE_MS) {
         const Screen* s = _curScreen();
+        UIState stateBeforeSave = _state;
         if (s && s->onSave) s->onSave();
-        _curPos = s ? s->fieldCount : 2; // land cursor on BACK after save
-        _setState(ST_NAV);
-        showMessage(F("Settings saved!"), nullptr, 1000);
+        // If onSave() itself redirected elsewhere (e.g. it called startCalibration(),
+        // which sets ST_CAL_PROMPT), respect that instead of unconditionally forcing
+        // NAV back over it -- this is what made an onSave() that launches another
+        // screen indistinguishable from one that just silently did nothing.
+        if (_state == stateBeforeSave) {
+            _curPos = s ? s->fieldCount : 2; // land cursor on BACK after save
+            _setState(ST_NAV);
+            showMessage(F("Settings saved!"), nullptr, 1000);
+        }
     }
 }
 
@@ -1367,6 +1431,63 @@ void APALCDGUI::_stateTimerEdit() {
     if (_passActive || _statusIndicator) _renderPassiveCorner();
 }
 
+// ---- State: CAL_PROMPT -------------------------------------------------------
+// KB2 press synchronously calls onPoint1/onPoint2 -- this BLOCKS for the full
+// duration of the sensor's own capture call (typically minutes). No other
+// update() work runs during that block; the sensor's own TickCallback (not
+// this library's update()) is what should keep an external watchdog fed.
+// No cancel is possible once capture has started -- nothing is running to
+// service a button press until the callback returns.
+void APALCDGUI::_stateCalPrompt() {
+    if (_dirty) { _renderCalPrompt(); _dirty = false; }
+    if (_calActiveIdx < 0) { _setState(ST_NAV); return; }
+
+    if (_enc[0].pressed) {              // KB1 = cancel (only reachable pre-capture)
+        _touchInput();
+        _calActiveIdx = -1;
+        _setState(ST_NAV);
+        return;
+    }
+
+    if (_enc[1].pressed) {              // KB2 = go
+        _touchInput();
+        CalScreen& c = _calScreens[_calActiveIdx];
+        char buf[COLS + 1];
+
+        _rowWrite(1, "Capturing...");
+        _rowWrite(2, "");
+
+        if (_calStep == 0) {
+            float mV = c.onPoint1(c.point1KnownValue);
+            // Refresh _inputMs -- it "feeds both timeouts" (see its own doc comment):
+            // _checkMenuTimeout() is already exempted for this state, but _blUpdate()
+            // is NOT and has no per-state exemption at all. Without this, the very
+            // first _blUpdate() call after this multi-minute blocking capture returns
+            // would see a huge stale elapsed time and could snap the backlight straight
+            // to dim or fully off right when the operator needs it to read the result.
+            _touchInput();
+            char vbuf[8]; dtostrf(mV, 4, 1, vbuf);
+            snprintf(buf, sizeof(buf), "Captured: %s mV", vbuf);
+            _rowWrite(1, buf);
+            delay(APALCDGUI_CAL_CAPTURED_MS); // human-readable pause -- same pattern as
+                         // APAPHX2_ADS1115's own 08_LCDDisplay.ino example; negligible next
+                         // to the multi-minute capture that just finished
+            _calStep = 1;
+            _renderCalPrompt();
+        } else {
+            bool ok = c.onPoint2(c.point2KnownValue);
+            _touchInput(); // see the matching comment in the point-1 branch above
+            _rowWrite(1, ok ? "Calibration OK!" : "Calibration FAILED");
+            delay(APALCDGUI_CAL_RESULT_MS); // longer than the interim "Captured" pause above --
+                         // this is the final result the operator actually cares about reading
+                         // before the screen returns to the menu
+            _calActiveIdx = -1;
+            _calStep      = 0;
+            _setState(ST_NAV);
+        }
+    }
+}
+
 // ---- update() ---------------------------------------------------------------
 void APALCDGUI::update() {
     if (!_ready) return;
@@ -1405,5 +1526,6 @@ void APALCDGUI::update() {
         case ST_RTC_EDIT:    _stateRTCEdit();     break;
         case ST_TIMER:       _stateTimer();       break;
         case ST_TIMER_EDIT:  _stateTimerEdit();   break;
+        case ST_CAL_PROMPT:  _stateCalPrompt();   break;
     }
 }
