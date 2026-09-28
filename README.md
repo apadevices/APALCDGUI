@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.6.1](https://img.shields.io/badge/version-1.6.1-blue)
+· ![v1.6.2](https://img.shields.io/badge/version-1.6.2-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -388,7 +388,7 @@ fieldChoice(label, uint8_t* index, const char* choices[])
 fieldBool(label, bool* val)
 
 // Button — shows "STRT" on SAVE; pressing flashes ► for 300 ms then fires fn()
-// confirm=true adds a "Confirm action?" prompt (KB1=NO, KB2=YES) before firing
+// confirm=true adds a "Confirm action?" prompt (starts on NO; turn KB2 to YES, press KB2) before firing
 fieldAction(label, void (*fn)(), confirm = false)
 
 // Display only — cursor skips this field; no editing possible
@@ -428,7 +428,7 @@ fieldReadonly(label, unit, float* val, decimals)
 | `fieldFloat(label, unit, float*, min, max, step, decimals)` | Float field, displayed with N decimal places. |
 | `fieldChoice(label, uint8_t*, const char*[])` | Cycles through null-terminated string array. Each string must be exactly 4 chars. |
 | `fieldBool(label, bool*)` | Toggle — shows `" ON "` / `"OFF "`. |
-| `fieldAction(label, fn, confirm=false)` | Button — shows `"STRT"`. Press flashes `►` for 300 ms then fires `fn()`. `confirm=true` adds a confirmation prompt first. |
+| `fieldAction(label, fn, confirm=false)` | Button — shows `"STRT"`. Press flashes `►` for 300 ms then fires `fn()`. `confirm=true` adds a confirmation prompt first: the cursor starts on NO, turn KB2 to YES and press KB2 to fire; KB1 cancels. |
 | `fieldReadonly(label, unit, float*, decimals)` | Display only — cursor skips this field. |
 
 ### Alerts and status indicator
@@ -571,15 +571,15 @@ Define these **before** `#include <APALCDGUI.h>`:
 
 ## Platform Verification
 
-Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms (v1.6.1). Zero errors, zero library warnings.
+Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms (v1.6.2). Zero errors, zero library warnings (ESP8266 included since v1.6.2).
 
 | Platform | Board | Clock | RAM used | RAM total | Flash used | Flash total |
 |----------|-------|-------|----------|-----------|------------|-------------|
-| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 484 B | 8 192 B (18%) | 22 192 B | 253 952 B (9%) |
-| Arduino Uno | ATmega328P | 16 MHz | 1 472 B | 2 048 B (72%) | 20 282 B | 32 256 B (63%) |
-| ESP32 DevKit | ESP32 | 240 MHz | 23 436 B | 327 680 B (7%) | 300 337 B | 1 310 720 B (23%) |
-| ESP8266 D1 Mini | ESP8266 | 80 MHz | 30 144 B | 81 920 B (37%) | 285 503 B | 1 044 464 B (27%) |
-| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 512 B | 20 480 B (17%) | 39 116 B | 65 536 B (60%) |
+| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 484 B | 8 192 B (18%) | 22 350 B | 253 952 B (9%) |
+| Arduino Uno | ATmega328P | 16 MHz | 1 472 B | 2 048 B (72%) | 20 440 B | 32 256 B (63%) |
+| ESP32 DevKit | ESP32 | 240 MHz | 23 436 B | 327 680 B (7%) | 300 445 B | 1 310 720 B (23%) |
+| ESP8266 D1 Mini | ESP8266 | 80 MHz | 30 144 B | 81 920 B (37%) | 285 615 B | 1 044 464 B (27%) |
+| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 512 B | 20 480 B (17%) | 39 268 B | 65 536 B (60%) |
 
 > The Uno row shows 72% RAM with the 4-screen example — that includes the full `02_8screens` sketch overhead (6 field types, 8 registrations capped at 4, home + alert callbacks). The library core alone is smaller. For production Uno use, a 2–3 screen sketch will sit comfortably below 50%.
 >

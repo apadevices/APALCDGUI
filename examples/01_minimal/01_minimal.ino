@@ -7,9 +7,9 @@
 // APA Devices HMI board v1.0 — call begin() with explicit pins for other hardware.
 //
 // ---- Controls ---------------------------------------------------------------
-//   Right knob (KB1) — rotate: navigate to the settings screen
+//   KB1 (knob 1)     — rotate: navigate to the settings screen
 //                      hold + rotate: adjust backlight brightness
-//   Left  knob (KB2) — rotate: move cursor between fields
+//   KB2 (knob 2)     — rotate: move cursor between fields
 //                      press: enter edit mode / confirm
 //                      long press: show passive alert detail (if any), then clear
 

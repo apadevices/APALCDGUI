@@ -22,8 +22,8 @@
 //   - setCalMessage()        — route live progress text onto the wizard's screen
 //
 // ---- Controls -----------------------------------------------------------
-//   Right knob (KB1) — rotate: navigate between screens
-//   Left  knob (KB2) — rotate: move cursor / toggle a value
+//   KB1 (knob 1)     — rotate: navigate between screens
+//   KB2 (knob 2)     — rotate: move cursor / toggle a value
 //                       press:  enter edit / commit / confirm
 
 #include <APALCDGUI.h>
@@ -84,7 +84,7 @@ void drawHome(LiquidCrystal& lcd) {
     lcd.setCursor(0, 1);
     if (g_isCalibrated) {
         char vbuf[8]; dtostrf(g_calibratedValue, 4, 2, vbuf);
-        char buf[21]; snprintf(buf, sizeof(buf), "Value: %s        ", vbuf);
+        char buf[21]; snprintf(buf, sizeof(buf), "Value: %-7.7s      ", vbuf);  // exactly 20 chars
         lcd.print(buf);
     } else {
         lcd.print(F("Value: -- (not cal.)"));

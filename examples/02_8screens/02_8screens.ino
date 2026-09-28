@@ -27,9 +27,9 @@
 //   APA Devices HMI board v1.0 — all default pins, no arguments needed to begin().
 //
 // ---- Controls ---------------------------------------------------------------
-//   Right knob (knob1 / KB1) — rotate: navigate between screens
+//   KB1 (knob 1)             — rotate: navigate between screens
 //                               hold KB1 + rotate: adjust brightness
-//   Left  knob (knob2 / KB2) — rotate: move cursor / change value when editing
+//   KB2 (knob 2)             — rotate: move cursor / change value when editing
 //                               press: enter edit mode or confirm
 //                               long press (800 ms): show passive alert text then dismiss it
 

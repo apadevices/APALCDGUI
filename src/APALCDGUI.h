@@ -19,13 +19,11 @@
 //                 press:      enter edit mode, or confirm a selection
 //                 long press: show passive alert detail text, then dismiss it
 //
-// "Right knob"/"left knob" labels used elsewhere in these docs describe KB1/KB2's
-// physical position on the APA Devices HMI board v1.0 specifically (enc1 wired to
-// the right-hand connector, enc2 to the left-hand one). A different board can wire
-// the two encoders to opposite physical positions -- identify your knobs by what
-// they DO (KB1 navigates screens, KB2 moves the cursor and edits values), not by
-// which side they happen to sit on, since that's a per-board wiring choice, not a
-// property of the library.
+// Which physical knob is KB1 depends only on how the encoders are wired (enc1 pins in
+// begin()), so these docs and all examples name the knobs by what they DO (KB1
+// navigates screens, KB2 moves the cursor and edits values), never by which side of
+// the panel they sit on -- that is a per-board wiring choice, not a property of the
+// library.
 //
 // Submenu screen layout (20 columns × 4 rows):
 //   row 0: [cursor][label (12 ch)][ ][value (4 ch)][unit (2 ch)]
@@ -54,7 +52,7 @@
 #endif
 
 // ---- Version ----------------------------------------------------------------
-#define APALCDGUI_VERSION "1.6.1"
+#define APALCDGUI_VERSION "1.6.2"
 
 // ---- Capacity — define BEFORE #include to override --------------------------
 // These control compile-time array sizes; defining them after #include has no effect.
@@ -181,9 +179,8 @@ public:
      *  All defaults match the APA Devices HMI board v1.0.
      *  Call once in setup() — must be called before addScreen() or update().
      *
-     *  enc1 = KB1 (knob1) — used for screen navigation and brightness. Physical
-     *         position ("right knob" on the APA Devices HMI board v1.0) varies by
-     *         board wiring -- identify by function, not by side.
+     *  enc1 = KB1 (knob1) — used for screen navigation and brightness. Its physical
+     *         position depends on board wiring -- identify by function, not by side.
      *  enc2 = KB2 (knob2) — used for cursor movement and value editing. Same caveat.
      *  encNDetents: encoder pulses per physical click — 4 is correct for PEC11R encoders. */
     void begin(
@@ -659,7 +656,7 @@ private:
 
     // ---- Edit ---------------------------------------------------------------
     float    _editVal;  // working copy while editing — committed on SAVE, discarded on BACK
-    uint8_t  _editIdx;  // which field is being edited: 0, 1, or 2
+    uint8_t  _editIdx;  // which field is being edited: 0, 1, or 2 (ST_CONFIRM: 0 = NO, 1 = YES)
 
     // ---- Backlight ----------------------------------------------------------
     BlStage  _blStage;

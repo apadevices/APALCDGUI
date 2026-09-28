@@ -112,7 +112,7 @@ void onKb2Long() {
 void setup() {
     gui.begin();
     gui.setHomeCallback(drawHome);
-    // Override KB2 long press — pass index 1 for the left knob (KB2).
+    // Override KB2 long press — pass index 1 for KB2 (knob 2).
     // Remove this line to use the built-in behaviour (show alert text, then clear).
     gui.setLongPressCallback(1, onKb2Long);
 

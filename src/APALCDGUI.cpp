@@ -1068,6 +1068,7 @@ void APALCDGUI::_stateNav() {
                     if (f.confirm) {
                         _pendingAction = f.action;
                         _pendingLabel  = f.label;
+                        _editIdx       = 0;   // confirm selection starts on NO
                         _setState(ST_CONFIRM);
                     } else {
                         _pendingAction = f.action;
@@ -1224,22 +1225,38 @@ void APALCDGUI::_stateBrightness() {
 }
 
 // ---- State: CONFIRM --------------------------------------------------------
+// _editIdx holds the selection here (0 = NO, 1 = YES) — it is unused while confirming.
+// Starts on NO: confirming takes a deliberate KB2 turn + press, so a double press on the
+// action field can never fire it by accident.
 void APALCDGUI::_stateConfirm() {
     if (_dirty) {
         char lbuf[14]; _fstr(lbuf, _pendingLabel, 13);
         _rowWrite(0, "  Confirm action?   ");
         _rowWrite(1, lbuf);
         _rowWrite(2, "");
-        _rowWrite(3, ">*NO           *YES ");
+        char r3[COLS + 1];
+        memcpy(r3, "  NO           YES  ", COLS + 1);
+        r3[_editIdx ? 14 : 1] = '>';
+        _rowWrite(3, r3);
         _dirty = false;
     }
-    if (_enc[1].pressed) { // KB2 = YES — execute action
+    int32_t k2 = _encClicks(1);
+    if (k2 != 0) {             // KB2 turn: right = YES, left = NO
         _touchInput();
-        void (*fn)() = _pendingAction;
+        uint8_t sel = (k2 > 0) ? 1 : 0;
+        if (sel != _editIdx) { _editIdx = sel; _dirty = true; }
+    }
+    if (_enc[1].pressed) {     // KB2 press: carry out the selection
+        _touchInput();
+        void (*fn)() = _editIdx ? _pendingAction : nullptr;
+        if (fn) {
+            const Screen* s = _curScreen();
+            _curPos = s ? s->fieldCount + 1 : 2;   // jump cursor to SAVE, as ST_FLASH_ACTION does
+        }
         _setState(ST_NAV);
         if (fn) fn();
     }
-    if (_enc[0].pressed) { // KB1 = NO — cancel
+    if (_enc[0].pressed) {     // KB1 press: always cancel
         _touchInput();
         _setState(ST_NAV);
     }
@@ -1256,11 +1273,11 @@ void APALCDGUI::_stateRTCNav() {
         for(uint8_t f=0;f<3;f++) { uint8_t c=f*6+2; for(uint8_t k=0;labels[_rtcSub][f][k];k++) r0[c+k]=labels[_rtcSub][f][k]; }
         _rowWrite(0, r0);
         char r1[COLS+1]; memset(r1,' ',COLS); r1[COLS]='\0';
-        char tmp[5];
+        char tmp[7];   // worst-case int16_t "-32768" + NUL — values are clamped far below that
         for(uint8_t f=0;f<3;f++){
             uint8_t c=f*6+2;
-            if(_rtcSub==1&&f==2) snprintf(tmp,5,"%04d",_rtcVal[_rtcSub][f]);
-            else snprintf(tmp,5,"%2d",_rtcVal[_rtcSub][f]);
+            if(_rtcSub==1&&f==2) snprintf(tmp,sizeof(tmp),"%04d",_rtcVal[_rtcSub][f]);
+            else snprintf(tmp,sizeof(tmp),"%2d",_rtcVal[_rtcSub][f]);
             for(uint8_t k=0;tmp[k]&&c+k<COLS;k++) r1[c+k]=tmp[k];
         }
         _rowWrite(1, r1);
@@ -1328,10 +1345,10 @@ void APALCDGUI::_stateRTCEdit() {
             if (_rtcCur == 2) { if(v<2000)v=2099; if(v>2099)v=2000; }
         }
         _dirty = true;
-        char tmp[5];
+        char tmp[7];   // worst-case int16_t "-32768" + NUL — v is clamped above
         uint8_t col = _rtcCur * 6 + 2;
-        if (_rtcSub==1 && _rtcCur==2) snprintf(tmp,5,"%04d",v);
-        else snprintf(tmp,5,"%2d",v);
+        if (_rtcSub==1 && _rtcCur==2) snprintf(tmp,sizeof(tmp),"%04d",v);
+        else snprintf(tmp,sizeof(tmp),"%2d",v);
         _padWrite(col, 1, tmp, (_rtcSub==1&&_rtcCur==2) ? 4 : 2);
     }
 

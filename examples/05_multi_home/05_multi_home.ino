@@ -1,7 +1,7 @@
 // APALCDGUI — Multiple home screen pages
 //
 // Shows how to register more than one home page using addHomeScreen().
-// The operator scrolls between pages by rotating knob2 (left knob) on the home
+// The operator scrolls between pages by rotating KB2 (knob 2) on the home
 // screen. The library draws the page indicator (1/3, 2/3, 3/3) automatically at
 // row 3 cols 17–19 — no user code required.
 //
@@ -24,9 +24,9 @@
 //     #define APA_LCD_MAX_SCREENS 8
 //
 // ---- Controls ----------------------------------------------------------------
-//   Right knob (KB1) — rotate: navigate between screens
+//   KB1 (knob 1)     — rotate: navigate between screens
 //                      hold + rotate: adjust backlight brightness
-//   Left  knob (KB2) — rotate on HOME: scroll between home pages
+//   KB2 (knob 2)     — rotate on HOME: scroll between home pages
 //                      rotate on menu: move cursor / change value
 //                      press: enter edit mode or confirm
 //                      long press (800 ms): show passive alert text, then dismiss
@@ -142,7 +142,8 @@ void drawPage2(LiquidCrystal& lcd) {
     lcd.setCursor(0, 0); lcd.print(F("-- This week -------"));
 
     // Row 1: dose counts
-    snprintf(buf, sizeof(buf), "pH-: %3d  CL+: %3d  ", g_dosesWeekPh, g_dosesWeekCl);
+    snprintf(buf, sizeof(buf), "pH-: %3u  CL+: %3u  ",   // counts are never negative; %1000 keeps 3 digits
+             (unsigned)((uint16_t)g_dosesWeekPh % 1000), (unsigned)((uint16_t)g_dosesWeekCl % 1000));
     lcd.setCursor(0, 1); lcd.print(buf);
 
     // Row 2: last dose time (cols 0–16 only)

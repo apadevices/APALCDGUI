@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.2] — 2026-09-28
+
+### Fixed
+
+- **"Confirm action?" prompt had a cursor that never moved, and a double press could fire the action.** The prompt drew a static `>*NO ... *YES` but was really two buttons (KB1 = NO, KB2 = YES): turning a knob did nothing, and a second KB2 press right after opening a `confirm=true` action fired it immediately — for an action like dosing-pump priming (which bypasses dosing safety checks) that is a real risk. Now the `>` starts on **NO**, turning KB2 right/left selects YES/NO, pressing KB2 carries out the selection (YES fires the action and moves the cursor to SAVE, as a plain action does), and pressing KB1 always cancels. Zero extra RAM. Found on real hardware by APA-CONTROLLER's Priming screen.
+- **ESP8266 build warnings.** The RTC modal's `snprintf` buffers were 5 bytes for `int16_t` values, which GCC flags as possible truncation (`-Wformat-truncation`); now sized for the full `int16_t` range. Examples `04_rtc`, `05_multi_home` and `07_calibration` also warned; their values are now range-bounded. The library and all examples build without warnings on all five platforms.
+
+### Changed
+
+- **Knob wording is function-only everywhere.** Examples described KB1/KB2 as "right knob"/"left knob", which is only true for one board's wiring — on other boards (including APA Devices' own) KB1 sits on the left. Every example, the `APALCDGUI.h` notes and the design spec now name the knobs by what they do: KB1 navigates screens, KB2 moves the cursor and edits.
+- README and `docs/API.md` describe the new confirm-prompt behaviour.
+
 ## [1.6.1] — 2026-09-28
 
 ### Fixed

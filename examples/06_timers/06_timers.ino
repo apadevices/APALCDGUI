@@ -38,9 +38,9 @@
 //   The LCD shows 3 slots at a time; ↑/↓ indicators appear when the list scrolls.
 //
 // ---- Controls (hardware) ----------------------------------------------------
-//   Right knob (KB1) — rotate: navigate between screens
+//   KB1 (knob 1)     — rotate: navigate between screens
 //                      hold + rotate: adjust backlight brightness
-//   Left  knob (KB2) — rotate on HOME: (not used, single home page)
+//   KB2 (knob 2)     — rotate on HOME: (not used, single home page)
 //                      rotate on timer: move cursor or change time
 //                      press: enter edit or confirm
 //                      long press (800 ms): show passive alert text, then dismiss

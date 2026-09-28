@@ -472,7 +472,7 @@ static FieldDef fieldAction(const __FlashStringHelper* label,
                             void (*action)() = nullptr,
                             bool confirm = false);
 ```
-Button field. Shows `"STRT"` when `action` is non-null, `"-no-"` when nullptr. When the operator presses KB2 on an ACTION field, the cursor changes to `►` for 300 ms (click confirmation flash) then `action()` fires and the cursor jumps to SAVE. `confirm=true` shows a full-screen "Confirm action?" prompt (KB1=NO, KB2=YES) before calling `action` — use for irreversible operations.
+Button field. Shows `"STRT"` when `action` is non-null, `"-no-"` when nullptr. When the operator presses KB2 on an ACTION field, the cursor changes to `►` for 300 ms (click confirmation flash) then `action()` fires and the cursor jumps to SAVE. `confirm=true` shows a full-screen "Confirm action?" prompt before calling `action` — use for irreversible operations. The `>` starts on **NO**; turning KB2 right moves it to YES, left back to NO; pressing KB2 carries out the selection (YES fires `action` and jumps the cursor to SAVE; NO cancels); pressing KB1 always cancels. Starting on NO means a double press on the action field can never fire it by accident.
 
 ### `fieldReadonly()`
 ```cpp
