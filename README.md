@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.6.0](https://img.shields.io/badge/version-1.6.0-blue)
+· ![v1.6.1](https://img.shields.io/badge/version-1.6.1-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -571,7 +571,7 @@ Define these **before** `#include <APALCDGUI.h>`:
 
 ## Platform Verification
 
-Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms (v1.6.0). Zero errors, zero library warnings.
+Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms (v1.6.1). Zero errors, zero library warnings.
 
 | Platform | Board | Clock | RAM used | RAM total | Flash used | Flash total |
 |----------|-------|-------|----------|-----------|------------|-------------|

@@ -111,7 +111,7 @@ void onBothPressed() {
 
 void drawHome(LiquidCrystal& lcd) {
     char fa[5], fb[5];
-    char buf[21];
+    char buf[22]; // 22 = worst-case int16_t (6 chars) + dtostrf (4) + fixed text (11) + NUL
 
     dtostrf(g_ph, 4, 2, fa);
     snprintf(buf, sizeof(buf), "pH%s  ORP%4dmV  ", fa, g_orp);
@@ -125,7 +125,7 @@ void drawHome(LiquidCrystal& lcd) {
     lcd.setCursor(18, 1); lcd.print(F("  "));
 
     uint32_t upH = (uint32_t)g_uptime;
-    snprintf(buf, sizeof(buf), "Filt OK  Up%6luh  ", (unsigned long)upH);
+    snprintf(buf, sizeof(buf), "Filt OK Up%6luh   ", (unsigned long)upH);
     lcd.setCursor(0, 2); lcd.print(buf);
 
     lcd.setCursor(0, 3); lcd.print(F("K1:screens K2:edit  "));

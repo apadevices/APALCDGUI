@@ -110,7 +110,7 @@ void onBothPressed() {
 // ---- Page 1: live sensor readings -------------------------------------------
 void drawPage1(LiquidCrystal& lcd) {
     char fa[5], fb[5];
-    char buf[21];
+    char buf[22]; // 22 = worst-case int16_t (6 chars) + dtostrf (4) + fixed text (11) + NUL
 
     // Row 0: pH and ORP
     dtostrf(g_ph, 4, 2, fa);
@@ -127,7 +127,7 @@ void drawPage1(LiquidCrystal& lcd) {
 
     // Row 2: filter state (cols 0–16 only — 17–19 = alert indicator)
     uint32_t upH = (uint32_t)g_uptime;
-    snprintf(buf, sizeof(buf), "Filt OK  Up%6luh", (unsigned long)upH);
+    snprintf(buf, sizeof(buf), "Filt OK Up%6luh   ", (unsigned long)upH);
     lcd.setCursor(0, 2); lcd.print(buf);
 
     // Row 3: hint (cols 0–16 only — 17–19 = page indicator)
@@ -151,7 +151,7 @@ void drawPage2(LiquidCrystal& lcd) {
     // Row 3: total volume (cols 0–16 only — 17–19 = page indicator)
     char mlStr[6];
     dtostrf(g_doseMlWeek, 5, 0, mlStr);
-    snprintf(buf, sizeof(buf), "Total acid: %5sml", mlStr);
+    snprintf(buf, sizeof(buf), "Acid:  %5s ml     ", mlStr);
     lcd.setCursor(0, 3); lcd.print(buf);
 }
 
@@ -162,23 +162,23 @@ void drawPage3(LiquidCrystal& lcd) {
     // Row 0: uptime
     uint32_t upH = (uint32_t)g_uptime;
     uint32_t upM = (uint32_t)((g_uptime - upH) * 60.0f);
-    snprintf(buf, sizeof(buf), "Uptime: %4luh %2lum    ", (unsigned long)upH, (unsigned long)upM);
+    snprintf(buf, sizeof(buf), "Uptime: %4luh %2lum   ", (unsigned long)upH, (unsigned long)upM);
     lcd.setCursor(0, 0); lcd.print(buf);
 
     // Row 1: dose today
-    char doseStr[6];
+    char doseStr[8];
     dtostrf(g_doseToday, 5, 1, doseStr);
-    snprintf(buf, sizeof(buf), "Dose today: %5sml  ", doseStr);
+    snprintf(buf, sizeof(buf), "Dose today: %5.5sml ", doseStr);   // .5 = never wider than the row
     lcd.setCursor(0, 1); lcd.print(buf);
 
     // Row 2: firmware version (cols 0–16 only)
-    char fwStr[5];
+    char fwStr[8];
     dtostrf(l2_fwVersion, 4, 2, fwStr);
-    snprintf(buf, sizeof(buf), "Firmware:   %s     ", fwStr);
+    snprintf(buf, sizeof(buf), "Firmware:   %.4s    ", fwStr);
     lcd.setCursor(0, 2); lcd.print(buf);
 
     // Row 3: library version (cols 0–16 only — 17–19 = page indicator)
-    lcd.setCursor(0, 3); lcd.print(F("Lib: " APALCDGUI_VERSION "            "));
+    lcd.setCursor(0, 3); lcd.print(F("Lib: " APALCDGUI_VERSION "          "));
 }
 
 // ---- setup() ----------------------------------------------------------------

@@ -17,22 +17,23 @@
 
 APALCDGUI gui;
 
-int16_t setpoint = 72;    // target pH ×10 (7.2 = 72)
-float   flowRate = 1.5f;  // L/min
+// Variables updated when the operator presses SAVE — read them in onSave().
+float   phSetpoint  = 7.20f;  // target pH
+int16_t orpSetpoint = 680;    // target ORP in mV
 
 // Called every update() while the home screen is shown.
-// Draw sensor readings, status, time — keep fast, never block.
+// Draw sensor readings, status, time — keep it fast, never call delay() here.
 void drawHome(LiquidCrystal& lcd) {
     lcd.setCursor(0, 0); lcd.print(F("pH  7.24  ORP 680mV "));
     lcd.setCursor(0, 1); lcd.print(F("Cl  1.2   Temp  26C "));
-    lcd.setCursor(0, 2); lcd.print(F("Filter  ON   12:34  "));
-    lcd.setCursor(0, 3); lcd.print(F("System OK           "));
+    lcd.setCursor(0, 2); lcd.print(F("Filter ON   12:34   "));  // cols 17-19 = alert indicator
+    lcd.setCursor(0, 3); lcd.print(F("K1:settings         "));
 }
 
-// Called when the operator presses SAVE on the settings screen.
+// Called after the operator presses SAVE on the settings screen.
+// phSetpoint and orpSetpoint already hold the new values at this point.
 void onSave() {
-    // setpoint and flowRate are already updated — write to EEPROM or send
-    // to APADOSE here.
+    // Write phSetpoint and orpSetpoint to EEPROM, or send to APADOSE here.
 }
 
 void setup() {
@@ -41,8 +42,8 @@ void setup() {
     gui.setHomeCallback(drawHome);
 
     gui.addScreen(SCREEN_RIGHT,
-        APALCDGUI::fieldInt(  F("pH setpoint"), F("x1"), &setpoint, 68, 82, 1),
-        APALCDGUI::fieldFloat(F("Flow rate"),   F("Lm"), &flowRate, 0.5f, 5.0f, 0.1f, 1),
+        APALCDGUI::fieldFloat(F("pH setpoint"),  F("pH"), &phSetpoint,  6.8f, 7.8f, 0.01f, 2),
+        APALCDGUI::fieldInt(  F("ORP setpoint"), F("mV"), &orpSetpoint, 400,  850,  10),
         onSave
     );
 }

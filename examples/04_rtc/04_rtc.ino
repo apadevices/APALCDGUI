@@ -113,7 +113,7 @@ void drawHome(LiquidCrystal& lcd) {
     uint8_t h = rtc.getHour(h12, pm);
     uint8_t m = rtc.getMinute();
     uint8_t s = rtc.getSecond();
-    snprintf(buf, sizeof(buf), "Time: %02d:%02d:%02d       ", h, m, s);
+    snprintf(buf, sizeof(buf), "Time: %02d:%02d:%02d      ", h, m, s);
     lcd.setCursor(0, 2); lcd.print(buf);
 
     // Row 3: hint for the RTC gesture

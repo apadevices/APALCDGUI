@@ -92,8 +92,8 @@ void trigActive3() {
 
 void drawHome(LiquidCrystal& lcd) {
     lcd.setCursor(0, 0); lcd.print(F("  ALERT TEST BENCH  "));
-    lcd.setCursor(0, 1); lcd.print(F("R+1: passive alerts "));
-    lcd.setCursor(0, 2); lcd.print(F("R+2: active alerts  "));
+    lcd.setCursor(0, 1); lcd.print(F("Passive: R+1 R+2    "));
+    lcd.setCursor(0, 2); lcd.print(F("Active:  R+3 R+4    "));  // cols 17-19 = alert indicator
     lcd.setCursor(0, 3); lcd.print(F("KB2 long: clr pasv  "));
 }
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.1] — 2026-09-28
+
+### Fixed
+
+- **`APALCDGUI_VERSION` reported `"1.4.0"`** — the macro in `APALCDGUI.h` had not been updated since 1.4.0, so 1.4.x–1.6.0 all reported the wrong version to code that reads it (e.g. example 05's status page). Now `"1.6.1"`.
+- **Example home screens wrote into columns the library owns, or past column 20.** Row 2 cols 17-19 are the passive-alert indicator and row 3 cols 17-19 the page indicator (multi-page home); both are drawn after the home callback, so anything written there was erased:
+  - `01_minimal`: row 2 showed `12:3` instead of `12:34`.
+  - `02_8screens`, `05_multi_home`: the uptime row lost its `h` unit.
+  - `03_alerts`: row 1 was 21 chars; row 2 ran into the alert indicator. The labels were also wrong (R+2 is the critical passive alert, the active alerts are R+3/R+4) — now `Passive: R+1 R+2` / `Active:  R+3 R+4`.
+  - `05_multi_home`: page 2's `Total acid` row lost its `ml` unit under the page indicator; page 3 rows were 21-22 chars; `doseStr`/`fwStr` buffers were one byte short for larger values (now 8).
+  - `04_rtc`: the time row was 21 chars (harmless truncation, now exactly 20).
+- Examples `02_8screens` and `05_multi_home`: home-screen `buf` enlarged 21 → 22 (worst-case `int16_t` ORP value); `01_minimal` now uses realistic pH/ORP setpoint fields.
+
 ## [1.6.0] — 2026-09-28
 
 ### Added
