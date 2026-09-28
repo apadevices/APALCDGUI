@@ -503,11 +503,21 @@ public:
      *  Returns false if index >= APA_LCD_MAX_TIMERS. */
     bool isTimerEnabled(uint8_t index) const;
 
-    /** Returns the sum of all enabled timer slot durations in minutes.
+    /** Returns the total scheduled minutes per day (0-1440): every minute covered
+     *  by at least one slot, counted once — overlapping slots are not added twice.
+     *  A slot whose end is before its start runs across midnight (22:00-02:00 = 240).
      *  Use as the dailyTargetCb bridge for APAPUMP:
      *    pump.begin(scheduleActive, nullptr, []() { return gui.getTimerTotalMinutes(); })
      *  Returns 0 if no timer screen is registered or all slots are disabled. */
     uint16_t getTimerTotalMinutes() const;
+
+    /** Returns true when any timer slot covers nowMin (minutes from midnight, 0-1439).
+     *  Handles slots that run across midnight (22:00-02:00, or 22:00-00:00 = until
+     *  midnight). A slot with start == end (incl. 00:00-00:00) is off.
+     *  Use as the schedule bridge for APAPUMP:
+     *    pump.begin([]() { return gui.isTimerActive(nowMin); })
+     *  Returns false if nowMin >= 1440. */
+    bool isTimerActive(uint16_t nowMin) const;
 
     // ---- Calibration screen (optional, generic two-point guided wizard) -----
 

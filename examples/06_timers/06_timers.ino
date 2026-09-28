@@ -90,28 +90,14 @@ void onClockSave() {
 void onTimerSave() {
     // Re-evaluate pump state immediately after new schedule is saved
     uint16_t nowMin = (uint16_t)g_hour * 60 + g_minute;
-    g_pumpOn = false;
-    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
-        if (gui.isTimerEnabled(i) &&
-            nowMin >= gui.getTimerStart(i) &&
-            nowMin <  gui.getTimerEnd(i)) {
-            g_pumpOn = true;
-        }
-    }
+    g_pumpOn = gui.isTimerActive(nowMin);   // handles slots across midnight
     gui.markDirty();
 }
 
 // ---- Pump control loop — call this periodically (e.g. every minute) ------------
 void checkPumpSchedule() {
     uint16_t nowMin = (uint16_t)g_hour * 60 + g_minute;
-    bool shouldRun  = false;
-    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
-        if (gui.isTimerEnabled(i) &&
-            nowMin >= gui.getTimerStart(i) &&
-            nowMin <  gui.getTimerEnd(i)) {
-            shouldRun = true;
-        }
-    }
+    bool shouldRun  = gui.isTimerActive(nowMin);   // e.g. 22:00-02:00 runs overnight
     if (shouldRun != g_pumpOn) {
         g_pumpOn = shouldRun;
         gui.markDirty();

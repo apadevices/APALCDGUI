@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.5.0](https://img.shields.io/badge/version-1.5.0-blue)
+· ![v1.6.0](https://img.shields.io/badge/version-1.6.0-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -315,23 +315,19 @@ void loop() { gui.update(); }
 ```cpp
 void checkSchedule() {
     uint16_t nowMin = hour * 60 + minute;  // minutes since midnight
-    bool shouldRun  = false;
-    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
-        if (gui.isTimerEnabled(i) &&
-            nowMin >= gui.getTimerStart(i) &&
-            nowMin <  gui.getTimerEnd(i)) {
-            shouldRun = true;
-        }
-    }
+    bool shouldRun  = gui.isTimerActive(nowMin);
     // drive relay from shouldRun
 }
 ```
 
-`getTimerStart(i)` and `getTimerEnd(i)` return minutes since midnight (0–1410). `isTimerEnabled(i)` returns `false` when both times are 00:00 (slot disabled). `getTimerTotalMinutes()` returns the sum of all enabled slot durations — useful as a daily target for external pump controllers:
+`isTimerActive(nowMin)` returns `true` when any slot covers that minute. A slot whose end is before its start runs across midnight — `22:00-02:00` runs overnight, `22:00-00:00` runs until midnight. A slot with start equal to end (including `00:00-00:00`) is off. Use `isTimerActive()` rather than comparing `getTimerStart(i)`/`getTimerEnd(i)` yourself, so overnight slots work.
+
+`getTimerStart(i)` and `getTimerEnd(i)` return minutes since midnight (0–1410). `isTimerEnabled(i)` returns `false` when both times are 00:00 (slot disabled). `getTimerTotalMinutes()` returns the total scheduled minutes per day (overlapping slots counted once, max 1440) — useful as a daily target for external pump controllers:
 
 ```cpp
-// Bridge to APAPUMP daily target
-pump.begin(scheduleActive, nullptr, []() { return gui.getTimerTotalMinutes(); });
+// Bridge to APAPUMP: schedule + daily target
+pump.begin([]() { return gui.isTimerActive(nowMin); }, nullptr,
+           []() { return gui.getTimerTotalMinutes(); });
 ```
 
 See `examples/06_timers/` for a complete pump control example.
@@ -474,7 +470,8 @@ fieldReadonly(label, unit, float* val, decimals)
 | `getTimerStart(i)` | Start time for slot `i` in minutes since midnight (0–1410). Returns 0 if index out of range. |
 | `getTimerEnd(i)` | End time for slot `i` in minutes since midnight (0–1410). Returns 0 if index out of range. |
 | `isTimerEnabled(i)` | `true` when slot `i` has a non-zero start or end time (i.e., is not disabled). |
-| `getTimerTotalMinutes()` | Sum of all enabled timer slot durations in minutes. Use as a daily target for external pump controllers. Returns 0 if no timers registered or all slots disabled. |
+| `getTimerTotalMinutes()` | Total scheduled minutes per day (0–1440); overlapping slots counted once, overnight slots included. Use as a daily target for external pump controllers. Returns 0 if all slots are off. |
+| `isTimerActive(nowMin)` | `true` when any slot covers `nowMin` (minutes since midnight, 0–1439). Handles slots across midnight (`22:00-02:00`). Start == end = off. |
 
 ---
 
@@ -574,17 +571,17 @@ Define these **before** `#include <APALCDGUI.h>`:
 
 ## Platform Verification
 
-Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms. Zero errors, zero library warnings.
+Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms (v1.6.0). Zero errors, zero library warnings.
 
 | Platform | Board | Clock | RAM used | RAM total | Flash used | Flash total |
 |----------|-------|-------|----------|-----------|------------|-------------|
-| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 361 B | 8 192 B (17%) | 21 326 B | 253 952 B (8%) |
-| Arduino Uno | ATmega328P | 16 MHz | 1 349 B | 2 048 B (66%) | 19 420 B | 32 256 B (60%) |
-| ESP32 DevKit | ESP32 | 240 MHz | 23 380 B | 327 680 B (7%) | 299 581 B | 1 310 720 B (23%) |
-| ESP8266 D1 Mini | ESP8266 | 80 MHz | 29 984 B | 81 920 B (37%) | 284 415 B | 1 044 464 B (27%) |
-| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 448 B | 20 480 B (17%) | 38 484 B | 65 536 B (59%) |
+| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 484 B | 8 192 B (18%) | 22 192 B | 253 952 B (9%) |
+| Arduino Uno | ATmega328P | 16 MHz | 1 472 B | 2 048 B (72%) | 20 282 B | 32 256 B (63%) |
+| ESP32 DevKit | ESP32 | 240 MHz | 23 436 B | 327 680 B (7%) | 300 337 B | 1 310 720 B (23%) |
+| ESP8266 D1 Mini | ESP8266 | 80 MHz | 30 144 B | 81 920 B (37%) | 285 503 B | 1 044 464 B (27%) |
+| STM32 Bluepill | STM32F103C8 | 72 MHz | 3 512 B | 20 480 B (17%) | 39 116 B | 65 536 B (60%) |
 
-> The Uno row shows 66% RAM with the 4-screen example — that includes the full `02_8screens` sketch overhead (6 field types, 8 registrations capped at 4, home + alert callbacks). The library core alone is smaller. For production Uno use, a 2–3 screen sketch will sit comfortably below 50%.
+> The Uno row shows 72% RAM with the 4-screen example — that includes the full `02_8screens` sketch overhead (6 field types, 8 registrations capped at 4, home + alert callbacks). The library core alone is smaller. For production Uno use, a 2–3 screen sketch will sit comfortably below 50%.
 >
 > ESP32 and ESP8266 totals include the full Arduino framework (WiFi stack etc.) regardless of whether it is used.
 

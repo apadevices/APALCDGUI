@@ -318,13 +318,24 @@ bool APALCDGUI::isTimerEnabled(uint8_t index) const {
     if (index >= APA_LCD_MAX_TIMERS) return false;
     return (_timerStart[index] != 0 || _timerEnd[index] != 0);
 }
+// Counts each half-hour of the day covered by any slot, so overlapping slots
+// aren't counted twice and the total never exceeds 24 h.
 uint16_t APALCDGUI::getTimerTotalMinutes() const {
     uint16_t total = 0;
-    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
-        if (isTimerEnabled(i))
-            total += (uint16_t)(_timerEnd[i] - _timerStart[i]) * 30;
-    }
+    for (uint16_t m = 0; m < 1440; m += 30)
+        if (isTimerActive(m)) total += 30;
     return total;
+}
+// End before start = the slot runs across midnight; start == end = off.
+bool APALCDGUI::isTimerActive(uint16_t nowMin) const {
+    if (nowMin >= 1440) return false;
+    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
+        uint16_t s = (uint16_t)_timerStart[i] * 30, e = (uint16_t)_timerEnd[i] * 30;
+        if (s == e) continue;
+        bool on = (s < e) ? (nowMin >= s && nowMin < e) : (nowMin >= s || nowMin < e);
+        if (on) return true;
+    }
+    return false;
 }
 
 int8_t APALCDGUI::addCalibrationScreen(const __FlashStringHelper* title,
@@ -854,11 +865,7 @@ void APALCDGUI::_renderHome() {
 // Row 2 cols 17-19 are owned by the passive alert indicator — no indicator placed there.
 void APALCDGUI::_renderTimer() {
     // Total enabled hours (committed values, not in-progress edit)
-    uint16_t totalMin = 0;
-    for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
-        if (_timerEnd[i] > _timerStart[i])
-            totalMin += (uint16_t)(_timerEnd[i] - _timerStart[i]) * 30;
-    }
+    uint16_t totalMin = getTimerTotalMinutes();
 
     uint8_t top      = _timerBits.viewTop;
     bool    hasAbove = (top > 0);

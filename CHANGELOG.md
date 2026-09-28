@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.0] — 2026-09-28
+
+### Added
+
+- **`isTimerActive(nowMin)`** — returns `true` when any timer slot covers the given minute of the day (0–1439). Handles slots that run across midnight. Use it as the schedule bridge instead of comparing `getTimerStart()`/`getTimerEnd()` yourself: `pump.begin([]() { return gui.isTimerActive(nowMin); })`.
+
+### Fixed
+
+- **Timer slots across midnight were not handled.** The timer screen lets the operator set an end time before the start time (e.g. `22:00-02:00`, or `22:00-00:00` for "until midnight"), but nothing read such a slot correctly: `getTimerTotalMinutes()` wrapped around and returned ~64000 minutes, the screen's own `Total:` row silently skipped the slot, and the documented control-loop pattern (`start <= now < end`, used in README, API.md and example 06) never switched it on. Such a slot now runs across midnight everywhere. A slot whose start equals its end is off (`00:00-00:00` stays "disabled", as before). Found while wiring the APA-CONTROLLER filtration pump schedule.
+- **`getTimerTotalMinutes()` counted overlapping slots twice** (`08:00-12:00` + `10:00-14:00` gave 8 h instead of 6 h). It now counts every half-hour covered by any slot once, so the value is the real daily run time (max 1440) — correct as an APAPUMP daily target. The screen's `Total:` row uses the same function, so the two can no longer disagree.
+
+### Changed
+
+- README, `docs/API.md` and `examples/06_timers` use `isTimerActive()` in place of the manual start/end loop. `keywords.txt` gains `isTimerActive` and the previously missing `getTimerTotalMinutes`.
+
 ## [1.5.0] — 2026-09-21
 
 ### Added

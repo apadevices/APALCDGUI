@@ -269,12 +269,8 @@ gui.addTimerScreen(SCREEN_RIGHT, onTimerSave);
 **Pump control loop:**
 ```cpp
 uint16_t nowMin = (uint16_t)hour * 60 + minute;
-for (uint8_t i = 0; i < APA_LCD_MAX_TIMERS; i++) {
-    if (gui.isTimerEnabled(i) &&
-        nowMin >= gui.getTimerStart(i) &&
-        nowMin <  gui.getTimerEnd(i)) {
-        // run pump or light
-    }
+if (gui.isTimerActive(nowMin)) {
+    // run pump or light — slots across midnight (22:00-02:00) included
 }
 ```
 
@@ -293,6 +289,33 @@ bool isTimerEnabled(uint8_t index) const;
 Returns `true` if timer slot `index` has a non-zero start or end time.
 A slot where both start and end are 00:00 is considered disabled.
 Returns `false` if `index >= APA_LCD_MAX_TIMERS`.
+
+### `isTimerActive()`
+```cpp
+bool isTimerActive(uint16_t nowMin) const;
+```
+Returns `true` when any timer slot covers `nowMin` (minutes from midnight, 0–1439).
+- A slot whose end is **before** its start runs across midnight: `22:00-02:00` is active from 22:00 to 01:59; `22:00-00:00` runs until midnight.
+- A slot whose start **equals** its end (including `00:00-00:00`) is off.
+- Returns `false` if `nowMin >= 1440`.
+
+Prefer this over comparing `getTimerStart()`/`getTimerEnd()` yourself — a plain `start <= now < end` check never runs an overnight slot.
+
+```cpp
+// APAPUMP schedule bridge
+pump.begin([]() { return gui.isTimerActive(nowMin); });
+```
+
+### `getTimerTotalMinutes()`
+```cpp
+uint16_t getTimerTotalMinutes() const;
+```
+Returns the total scheduled minutes per day (0–1440): every minute covered by at least one slot, counted once. Overlapping slots are not added twice; overnight slots are included. The timer screen's `Total:` row shows the same value.
+
+```cpp
+// APAPUMP daily target bridge
+pump.begin(scheduleCb, nullptr, []() { return gui.getTimerTotalMinutes(); });
+```
 
 ### `setRTC()`
 ```cpp
