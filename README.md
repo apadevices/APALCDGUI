@@ -5,7 +5,7 @@
 </p>
 
 **Parallel 20×4 LCD menu system with dual rotary encoders for APA Devices water treatment automation**
-· ![v1.6.2](https://img.shields.io/badge/version-1.6.2-blue)
+· ![v1.7.0](https://img.shields.io/badge/version-1.7.0-blue)
 · ![Platforms](https://img.shields.io/badge/platforms-AVR%20ESP8266%20ESP32%20STM32-brightgreen)
 
 ---
@@ -278,8 +278,8 @@ Row1: ►T2: 08:00[09:00]       ← after confirming start, end is selected
 | KB2 rotate | Move cursor between T1 / T2 / T3 / SAVE |
 | KB2 press on timer row | Enter inline edit — start time first, then end |
 | KB2 press while editing | Confirm field and advance to the next (start → end → back to timer list) |
-| KB2 press on SAVE row | Write to EEPROM, fire optional callback, return HOME |
-| KB1 press | Return HOME, discard uncommitted edits |
+| KB2 press on SAVE row | Write to EEPROM, fire optional callback, return HOME (or to the screen that opened it) |
+| KB1 press | Leave without saving — all unsaved edits are discarded |
 
 ### Registration
 
@@ -309,6 +309,37 @@ void setup() {
 
 void loop() { gui.update(); }
 ```
+
+### Opening the schedule from another screen — no menu slot
+
+Instead of giving the timer its own place in the KB1 rotation, you can open it from another
+screen — for example a **Schedule** choice right on your pump screen, next to the pump mode.
+Register it with `addTimerModal()` instead of `addTimerScreen()`, and call `openTimerScreen()`
+from that screen's `onSave`:
+
+```cpp
+static const char* schedChoices[] = {"-no-", "EDIT", nullptr};
+uint8_t schedChoice = 0;
+
+void onPumpSave() {
+    if (schedChoice == 1) {        // operator chose EDIT and pressed SAVE
+        schedChoice = 0;           // back to -no- for next time
+        gui.openTimerScreen();     // opens the schedule; SAVE or KB1 return to this screen
+    }
+}
+
+void setup() {
+    gui.begin();
+    gui.addScreen(SCREEN_RIGHT,
+        APALCDGUI::fieldChoice(F("Pump"),     &pumpMode,    pumpModes),
+        APALCDGUI::fieldChoice(F("Schedule"), &schedChoice, schedChoices),
+        onPumpSave, F("Pump"));
+    gui.addTimerModal(onTimerSave);   // same slots, EEPROM and getters — just no menu slot
+}
+```
+
+Use either `addTimerScreen()` or `addTimerModal()`, not both. `openTimerScreen()` also works
+with `addTimerScreen()`. Opened from HOME code, SAVE and KB1 return to HOME.
 
 ### Reading timer values in your control loop
 
@@ -418,6 +449,8 @@ fieldReadonly(label, unit, float* val, decimals)
 | `addScreen(side, field1, field2, onSave, title)` | Register a 2-field screen (most common). |
 | `addScreen(side, field1, field2, field3, onSave, title)` | Register a 3-field screen. |
 | `addTimerScreen(side, onSave)` | Register the timer schedule screen on `side`. Call after all `addScreen()` on that side. `onSave` is optional — times are saved to EEPROM regardless. |
+| `addTimerModal(onSave)` | Register the timer schedule screen **without** a menu slot — opened only by `openTimerScreen()`. Use instead of `addTimerScreen()`. |
+| `openTimerScreen()` | Open the timer schedule screen now (e.g. from a screen's `onSave`). SAVE / KB1 return to the opening screen, or HOME. Returns `false` if no timer screen is registered. |
 | `setRTC(DS3231*)` | Wire 800 ms both-buttons-hold gesture to built-in time/date modal. Requires build flag `-DAPA_LCD_USE_DS3231`. |
 
 ### Field factories
@@ -571,11 +604,11 @@ Define these **before** `#include <APALCDGUI.h>`:
 
 ## Platform Verification
 
-Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms (v1.6.2). Zero errors, zero library warnings (ESP8266 included since v1.6.2).
+Compiled and size-checked with the `02_8screens` example using the default 4-screen limit on all supported platforms. Zero errors, zero library warnings (ESP8266 included since v1.6.2). Mega row re-measured for v1.7.0; the other rows are from v1.6.2 (1.7.0 adds no RAM).
 
 | Platform | Board | Clock | RAM used | RAM total | Flash used | Flash total |
 |----------|-------|-------|----------|-----------|------------|-------------|
-| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 484 B | 8 192 B (18%) | 22 350 B | 253 952 B (9%) |
+| Arduino Mega 2560 | ATmega2560 | 16 MHz | 1 484 B | 8 192 B (18%) | 22 446 B | 253 952 B (9%) |
 | Arduino Uno | ATmega328P | 16 MHz | 1 472 B | 2 048 B (72%) | 20 440 B | 32 256 B (63%) |
 | ESP32 DevKit | ESP32 | 240 MHz | 23 436 B | 327 680 B (7%) | 300 445 B | 1 310 720 B (23%) |
 | ESP8266 D1 Mini | ESP8266 | 80 MHz | 30 144 B | 81 920 B (37%) | 285 615 B | 1 044 464 B (27%) |

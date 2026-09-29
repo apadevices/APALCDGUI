@@ -52,7 +52,7 @@
 #endif
 
 // ---- Version ----------------------------------------------------------------
-#define APALCDGUI_VERSION "1.6.2"
+#define APALCDGUI_VERSION "1.7.0"
 
 // ---- Capacity — define BEFORE #include to override --------------------------
 // These control compile-time array sizes; defining them after #include has no effect.
@@ -486,6 +486,20 @@ public:
      *  Returns false if a timer screen is already registered. */
     bool addTimerScreen(ScreenSide side, void (*onSave)() = nullptr);
 
+    /** Register the timer schedule screen WITHOUT a navigation slot — it never appears
+     *  in the KB1 screen rotation and is opened only by openTimerScreen(). Use it to
+     *  reach the schedule from another screen (e.g. a "Schedule EDIT" choice on a pump
+     *  screen) instead of spending a menu slot on it. Same slots, EEPROM and getters
+     *  as addTimerScreen(); use one or the other.
+     *  Returns false if a timer screen is already registered. */
+    bool addTimerModal(void (*onSave)() = nullptr);
+
+    /** Open the timer schedule screen now. Call from a screen's onSave() callback (the
+     *  same pattern as startCalibration()) or from HOME code. SAVE and KB1 then return
+     *  to the screen it was opened from (or HOME when opened from HOME).
+     *  Returns false if no timer screen is registered. */
+    bool openTimerScreen();
+
     /** Returns the start time of timer slot index as minutes from midnight (0–1410).
      *  A slot set to 00:00-00:00 is disabled — use isTimerEnabled() to check first.
      *  Returns 0 if index >= APA_LCD_MAX_TIMERS. */
@@ -702,12 +716,15 @@ private:
     uint8_t  _timerStart[APA_LCD_MAX_TIMERS]; // start slot per timer (0-47)
     uint8_t  _timerEnd[APA_LCD_MAX_TIMERS];   // end   slot per timer (0-47)
     void   (*_timerSaveCb)();                 // optional SAVE callback
-    int8_t   _timerScrPos;                    // 0=not registered, +n=right pos n, -n=left pos n
+    int8_t   _timerScrPos;                    // 0=not registered, +n=right pos n, -n=left pos n,
+                                              // TIMER_POS_MODAL = registered via addTimerModal()
+    static constexpr int8_t TIMER_POS_MODAL = 127;  // no navigation slot — far above any real position
     struct {
         uint8_t cursor    : 3;  // row cursor: 0..MAX_TIMERS-1 = timers, MAX_TIMERS = SAVE
         uint8_t editField : 1;  // 0=editing start, 1=editing end
         uint8_t viewTop   : 3;  // first visible timer index (scroll window, 0 when ≤3 timers)
-    } _timerBits;
+        uint8_t backToNav : 1;  // opened by openTimerScreen() from a screen: SAVE/KB1 return there
+    } _timerBits;               // 8 bits used — byte full
     uint8_t  _timerEditVal;                   // working copy of the slot being edited
     uint8_t  _timerOrigStart;                 // saved start slot when entering edit — restored on KB1 cancel
     uint8_t  _timerOrigEnd;                   // saved end   slot when entering edit — restored on KB1 cancel
@@ -768,6 +785,7 @@ private:
     void _saveEEPROM();
     void _loadTimerEEPROM();
     void _saveTimerEEPROM();
+    void _exitTimer();       // leave the timer screen: back to the opening screen, or HOME
 
     uint8_t       _countSide(ScreenSide side) const;
     const Screen* _curScreen() const;                        // nullptr when _scrPos == 0

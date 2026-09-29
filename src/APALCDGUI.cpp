@@ -173,7 +173,7 @@ void APALCDGUI::_setState(UIState s) {
 uint8_t APALCDGUI::_countSide(ScreenSide side) const {
     uint8_t n = 0;
     for (uint8_t i = 0; i < _nScreens; i++) if (_screens[i].side == side) n++;
-    if (_timerScrPos > 0 && side == SCREEN_RIGHT) n++;
+    if (_timerScrPos > 0 && _timerScrPos != TIMER_POS_MODAL && side == SCREEN_RIGHT) n++;
     if (_timerScrPos < 0 && side == SCREEN_LEFT)  n++;
     return n;
 }
@@ -283,7 +283,7 @@ void APALCDGUI::begin(
     for (uint8_t i = 0; i < APA_LCD_ACTIVE_ALERT_QUEUE; i++) _alertQ[i].used = false;
     _timerScrPos = 0; _timerSaveCb = nullptr; _timerEditVal = 0;
     _timerOrigStart = 0; _timerOrigEnd = 0;
-    _timerBits.cursor = 0; _timerBits.editField = 0; _timerBits.viewTop = 0;
+    _timerBits.cursor = 0; _timerBits.editField = 0; _timerBits.viewTop = 0; _timerBits.backToNav = 0;
     _loadTimerEEPROM();
     _nCalScreens = 0; _calActiveIdx = -1; _calStep = 0;
     _ready = true;
@@ -304,6 +304,33 @@ bool APALCDGUI::addTimerScreen(ScreenSide side, void (*onSave)()) {
     _timerScrPos = (side == SCREEN_RIGHT) ? (int8_t)pos : -(int8_t)pos;
     _timerSaveCb = onSave;
     return true;
+}
+
+bool APALCDGUI::addTimerModal(void (*onSave)()) {
+    if (_timerScrPos != 0) return false;
+    _timerScrPos = TIMER_POS_MODAL;   // registered, but never reached by KB1 navigation
+    _timerSaveCb = onSave;
+    return true;
+}
+
+bool APALCDGUI::openTimerScreen() {
+    if (_timerScrPos == 0) return false;
+    _timerBits.cursor    = 0;
+    _timerBits.viewTop   = 0;
+    _timerBits.backToNav = (_scrPos != 0) ? 1 : 0;   // opened from a screen -> return to it
+    _setState(ST_TIMER);
+    return true;
+}
+
+// Leaving the timer screen: back to the screen that opened it, or HOME.
+void APALCDGUI::_exitTimer() {
+    if (_timerBits.backToNav) {
+        _timerBits.backToNav = 0;
+        _setState(ST_NAV);
+    } else {
+        _scrPos = 0;
+        _setState(ST_HOME);
+    }
 }
 
 uint16_t APALCDGUI::getTimerStart(uint8_t index) const {
@@ -674,6 +701,8 @@ void APALCDGUI::_checkMenuTimeout() {
     uint32_t elapsed = millis() - _inputMs;
     if (elapsed >= totalMs) {
         _timeoutWarnSec = 0xFF;
+        if (_state == ST_TIMER || _state == ST_TIMER_EDIT) _loadTimerEEPROM();  // unsaved slot edits are discarded
+        _timerBits.backToNav = 0;
         _scrPos = 0;
         _calActiveIdx = -1; // guard: a stale index here would wrongly block the next startCalibration()
         _setState(ST_HOME);
@@ -979,7 +1008,7 @@ void APALCDGUI::_stateHome() {
             _scrPos = newPos;
             _curPos = 0;
             if (_timerScrPos != 0 && newPos == _timerScrPos) {
-                _timerBits.cursor = 0; _timerBits.viewTop = 0;
+                _timerBits.cursor = 0; _timerBits.viewTop = 0; _timerBits.backToNav = 0;
                 _setState(ST_TIMER);
             } else {
                 _setState(ST_NAV);
@@ -1036,7 +1065,7 @@ void APALCDGUI::_stateNav() {
             _scrPos = newPos;
             _curPos = 0;
             if (_timerScrPos != 0 && newPos == _timerScrPos) {
-                _timerBits.cursor = 0; _timerBits.viewTop = 0;
+                _timerBits.cursor = 0; _timerBits.viewTop = 0; _timerBits.backToNav = 0;
                 _setState(ST_TIMER);
                 return;
             }
@@ -1390,19 +1419,18 @@ void APALCDGUI::_stateTimer() {
             _timerBits.editField = 0;
             _setState(ST_TIMER_EDIT);
         } else {
-            // SAVE: write to EEPROM, fire callback, return HOME
+            // SAVE: write to EEPROM, fire callback, return to the opening screen or HOME
             _saveTimerEEPROM();
             if (_timerSaveCb) _timerSaveCb();
-            _scrPos = 0;
-            _setState(ST_HOME);
+            _exitTimer();
             showMessage(F("Timers saved!"), nullptr, 1000);
         }
     }
 
-    if (_enc[0].pressed) {  // KB1: return HOME, discard all uncommitted edits
+    if (_enc[0].pressed) {  // KB1: leave without saving
         _touchInput();
-        _scrPos = 0;
-        _setState(ST_HOME);
+        _loadTimerEEPROM();   // edits went straight into the live slots — restore the saved ones
+        _exitTimer();
     }
 
     if (_passActive || _statusIndicator) _renderPassiveCorner();

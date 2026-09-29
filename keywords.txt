@@ -55,6 +55,8 @@ getTimerStart	KEYWORD2
 getTimerEnd	KEYWORD2
 isTimerEnabled	KEYWORD2
 isTimerActive	KEYWORD2
+addTimerModal	KEYWORD2
+openTimerScreen	KEYWORD2
 getTimerTotalMinutes	KEYWORD2
 addCalibrationScreen	KEYWORD2
 startCalibration	KEYWORD2

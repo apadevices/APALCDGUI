@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.0] — 2026-09-29
+
+### Added
+
+- **`addTimerModal(onSave)` and `openTimerScreen()` — open the timer schedule from another screen, without spending a menu slot.** `addTimerModal()` registers the same timer screen as `addTimerScreen()` (same slots, EEPROM and getters) but keeps it out of the KB1 rotation; `openTimerScreen()` opens it, typically from a screen's `onSave` (e.g. a "Schedule: EDIT" choice next to the pump mode — the same pattern as `startCalibration()`). SAVE and KB1 then return to the screen that opened it instead of HOME. Zero extra RAM (uses the last free bit of the timer's packed state byte). Driven by APA-CONTROLLER, where the filtration schedule belongs on the pump screen.
+
+### Fixed
+
+- **Leaving the timer screen without saving kept the unsaved schedule active.** Slot edits were written straight into the live slots, and KB1 ("discard") or a menu timeout only left the screen — so `isTimerActive()` / `getTimerTotalMinutes()` followed the unsaved schedule until the next reboot reloaded EEPROM. Now KB1 and the menu timeout reload the saved slots, as the original design intended.
+
 ## [1.6.2] — 2026-09-28
 
 ### Fixed

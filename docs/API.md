@@ -54,6 +54,7 @@ gui.addHomeScreen(drawHome);  // or gui.setHomeCallback(drawHome) — identical
 | 4 | `gui.setMenuRow2Callback(fn)` | Optional — live data on menu row 2 |
 | 5 | `gui.addScreen(...)` | Register as many screens as needed |
 | 5a | `gui.addTimerScreen(side, onSave)` | **After** all `addScreen()` on the same side — always last |
+| 5b | `gui.addTimerModal(onSave)` | Instead of 5a — timer without a menu slot, opened by `openTimerScreen()` |
 | 6 | `gui.setLongPressCallback(...)` | Optional — override KB2 long-press |
 | 7 | `gui.setBothPressedCallback(fn)` | Optional — both-buttons gesture |
 | 8 | `gui.setRTC(&rtc)` | Optional — DS3231 time/date modal |
@@ -265,6 +266,32 @@ void onTimerSave() {
 }
 gui.addTimerScreen(SCREEN_RIGHT, onTimerSave);
 ```
+
+### `addTimerModal()` / `openTimerScreen()`
+```cpp
+bool addTimerModal(void (*onSave)() = nullptr);
+bool openTimerScreen();
+```
+`addTimerModal()` registers the same timer schedule screen as `addTimerScreen()` — same slots,
+EEPROM layout and getters — but **without a navigation slot**: it never appears in the KB1
+rotation. `openTimerScreen()` opens it; call it from a screen's `onSave()` (the same pattern as
+`startCalibration()`) or from HOME code. SAVE and KB1 on the timer screen then return to the
+screen that opened it, or to HOME when it was opened from HOME. `openTimerScreen()` also works
+with a timer registered by `addTimerScreen()`.
+
+Returns: `addTimerModal()` — `false` if a timer screen is already registered;
+`openTimerScreen()` — `false` if none is registered.
+
+```cpp
+void onPumpSave() {
+    if (schedChoice == 1) { schedChoice = 0; gui.openTimerScreen(); }  // "Schedule: EDIT" + SAVE
+}
+gui.addTimerModal(onTimerSave);
+```
+
+**Leaving without saving:** KB1 on the timer screen (and a menu timeout) discard every unsaved
+change — the slots are reloaded from EEPROM, so `isTimerActive()` never follows a schedule the
+operator did not save.
 
 **Pump control loop:**
 ```cpp
@@ -693,7 +720,7 @@ build_flags = -DAPA_LCD_MAX_SCREENS=8
 | 507 | 1 | Timer 3 end slot |
 | 508 | 1 | Timer validity marker (0xAF) |
 
-Addresses 500–501 are always used. Addresses 502–508 are only written when `addTimerScreen()` is called.
+Addresses 500–501 are always used. Addresses 502–508 are only written when a timer screen is registered (`addTimerScreen()` or `addTimerModal()`) and the operator presses SAVE.
 
 On ESP32 / ESP8266: `EEPROM.begin()` and `EEPROM.commit()` are called automatically by the library.
 
